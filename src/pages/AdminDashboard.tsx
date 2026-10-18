@@ -176,7 +176,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     monthlyFee: '1200',
   });
 
-  // Edit Member Modal (Admin assigns Allotted Desk & Study Goal)
+  const [markingFeePaidId, setMarkingFeePaidId] = useState<string | null>(null);
+
+  // Edit Member Modal (Admin assigns Allotted Desk, Study Goal & Fee Expiry Date)
   const [showEditMemberModal, setShowEditMemberModal] = useState(false);
   const [targetMemberForEdit, setTargetMemberForEdit] = useState<MemberProfile | null>(null);
   const [editMemberForm, setEditMemberForm] = useState({
@@ -186,6 +188,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     seatNumber: '',
     studyTarget: '',
     joiningDate: '',
+    feeDueDate: '',
     monthlyFee: '1200',
     membershipStatus: 'Active' as MemberProfile['membershipStatus'],
   });
@@ -630,6 +633,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       seatNumber: m.seatNumber || '',
       studyTarget: m.studyTarget || '',
       joiningDate: m.joiningDate || m.registrationDate || new Date().toISOString().split('T')[0],
+      feeDueDate: m.feeDueDate || new Date().toISOString().split('T')[0],
       monthlyFee: String(m.monthlyFee || 1200),
       membershipStatus: m.membershipStatus,
     });
@@ -646,6 +650,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       return;
     }
 
+    const feeDueDate = editMemberForm.feeDueDate || targetMemberForEdit.feeDueDate || new Date().toISOString().split('T')[0];
+    const { status: calculatedFeeStatus } = calculateFeeStatus(feeDueDate);
+
     await DataService.updateMember(
       targetMemberForEdit.id,
       {
@@ -655,6 +662,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         seatNumber: editMemberForm.seatNumber.trim() || 'Assigned Focus Desk',
         studyTarget: editMemberForm.studyTarget.trim() || 'Competitive Exam Target',
         joiningDate: editMemberForm.joiningDate || targetMemberForEdit.joiningDate,
+        feeDueDate,
+        feeStatus: calculatedFeeStatus,
         monthlyFee: Number(editMemberForm.monthlyFee) || 1200,
         membershipStatus: editMemberForm.membershipStatus,
       },
@@ -662,7 +671,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     );
     await loadData();
     setShowEditMemberModal(false);
-    alert('Student profile, email address, allotted desk, and study goal updated successfully!');
+    alert('Student profile, allotted desk, fee schedule, and expiry date updated successfully!');
   };
 
   const handleIssueWarning = async (e: React.FormEvent) => {
@@ -733,9 +742,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
   // ---------------- MEMBERSHIP FEE HANDLERS ----------------
   const handleMarkFeePaid = async (member: MemberProfile) => {
-    await DataService.markFeePaid(member.id, 'Chief Librarian');
-    await loadData();
-    alert(`✓ Fee marked as PAID for ${member.fullName}! Next renewal date has been advanced to next month.`);
+    if (markingFeePaidId === member.id) return; // Guard against accidental double clicks
+    setMarkingFeePaidId(member.id);
+    try {
+      await DataService.markFeePaid(member.id, 'Chief Librarian');
+      await loadData();
+      alert(`✓ Fee marked as PAID for ${member.fullName}! Next renewal date has been advanced by 1 month.`);
+    } finally {
+      setTimeout(() => setMarkingFeePaidId(null), 1200);
+    }
   };
 
   const handleSendFeeReminder = async (member: MemberProfile) => {
@@ -1607,10 +1622,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                           <button
                             className="btn-success"
                             onClick={() => handleMarkFeePaid(m)}
-                            style={{ padding: '5px 10px', fontSize: '0.75rem' }}
+                            disabled={markingFeePaidId === m.id}
+                            style={{ padding: '5px 10px', fontSize: '0.75rem', opacity: markingFeePaidId === m.id ? 0.6 : 1 }}
                             title="Mark as Paid"
                           >
-                            ✓ Paid
+                            {markingFeePaidId === m.id ? 'Saving...' : '✓ Paid'}
                           </button>
                           <button
                             className="btn-danger"
@@ -1919,10 +1935,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                               id={`fee-mark-paid-${m.id}`}
                               className="btn-success"
                               onClick={() => handleMarkFeePaid(m)}
-                              style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                              disabled={markingFeePaidId === m.id}
+                              style={{ padding: '6px 12px', fontSize: '0.78rem', opacity: markingFeePaidId === m.id ? 0.6 : 1 }}
                               title="Advance due date by 1 month upon payment"
                             >
-                              ✓ Mark as Paid
+                              {markingFeePaidId === m.id ? 'Saving...' : '✓ Mark as Paid'}
                             </button>
 
                             {(m.feeStatus === 'Overdue' || m.feeStatus === 'Due') ? (
@@ -3403,6 +3420,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   />
                 </div>
                 <div className="form-group">
+                  <label className="form-label" style={{ color: 'var(--accent-gold)' }}>
+                    Fee Expiry / Renewal Date *
+                  </label>
+                  <input
+                    id="admin-edit-member-feeduedate"
+                    type="date"
+                    className="form-input"
+                    value={editMemberForm.feeDueDate}
+                    onChange={(e) => setEditMemberForm({ ...editMemberForm, feeDueDate: e.target.value })}
+                    required
+                    style={{ borderColor: 'rgba(212, 175, 55, 0.45)' }}
+                  />
+                  <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '3px' }}>
+                    Adjust here if &quot;Paid&quot; was clicked twice by mistake.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="form-group">
                   <label className="form-label">Monthly Fee (₹)</label>
                   <input
                     type="number"
@@ -3412,20 +3449,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                     required
                   />
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Membership Status</label>
-                <select
-                  className="form-select"
-                  value={editMemberForm.membershipStatus}
-                  onChange={(e) => setEditMemberForm({ ...editMemberForm, membershipStatus: e.target.value as any })}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Suspended">Suspended</option>
-                  <option value="Review">On Review</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
+                <div className="form-group">
+                  <label className="form-label">Membership Status</label>
+                  <select
+                    className="form-select"
+                    value={editMemberForm.membershipStatus}
+                    onChange={(e) => setEditMemberForm({ ...editMemberForm, membershipStatus: e.target.value as any })}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Suspended">Suspended</option>
+                    <option value="Review">On Review</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
