@@ -242,7 +242,7 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
             </div>
 
             {generatedResetUrl && (
-              <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(16, 185, 129, 0.25)', textAlign: 'center' }}>
+              <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(16, 185, 129, 0.25)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <a
                   href={generatedResetUrl}
                   className="btn-gold"
@@ -262,8 +262,33 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
                 >
                   <KeyRound size={16} /> Open Password Reset Page Now →
                 </a>
-                <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginTop: '6px' }}>
-                  Click above to set your new password immediately, or use the email sent to your inbox.
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedResetUrl);
+                    alert('Password reset link copied to clipboard! You can paste it into any browser or tab.');
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    color: 'var(--accent-gold)',
+                    background: 'rgba(212, 175, 55, 0.12)',
+                    border: '1px solid rgba(212, 175, 55, 0.3)',
+                    borderRadius: 'var(--radius-pill)',
+                    cursor: 'pointer',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  📋 Copy Reset Link to Clipboard
+                </button>
+                <div style={{ fontSize: '0.74rem', color: '#94A3B8', textAlign: 'center', marginTop: '4px' }}>
+                  Click the button above to set your password instantly, or use the link dispatched to your inbox.
                 </div>
               </div>
             )}

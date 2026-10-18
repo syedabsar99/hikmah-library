@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth, DEFAULT_ADMIN_EMAIL } from '../context/AuthContext';
 import { EmailPasswordResetModal } from '../components/EmailPasswordResetModal';
-import { PasswordResetModal } from '../components/PasswordResetModal';
-import { Shield, Lock, Mail, AlertTriangle, ArrowLeft, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Shield, Lock, Mail, AlertTriangle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
 interface AdminLoginProps {
   onNavigate: (view: string) => void;
@@ -10,8 +9,7 @@ interface AdminLoginProps {
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess }) => {
-  const { loginAdmin, adminPhone, adminEmail } = useAuth();
-  const cleanAdminPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
+  const { loginAdmin, adminEmail } = useAuth();
 
   // Pre-fill with official admin email for convenience and clarity
   const [email, setEmail] = useState(() => {
@@ -30,9 +28,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
 
   // Email Password Reset Modal
   const [showEmailModal, setShowEmailModal] = useState(false);
-
-  // Mobile OTP Modal (SMS / WhatsApp)
-  const [showPhoneModal, setShowPhoneModal] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,36 +244,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
           >
             {loading ? 'Authenticating...' : 'Sign In as Administrator'}
           </button>
-
-          <div
-            style={{
-              marginTop: '20px',
-              paddingTop: '16px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-              alignItems: 'center',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setShowPhoneModal(true)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--accent-gold)',
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: '600',
-              }}
-            >
-              <KeyRound size={14} /> Reset via Mobile OTP (+91 {cleanAdminPhone.slice(0, 5)}*****)
-            </button>
-          </div>
         </form>
       </div>
 
@@ -288,20 +253,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
         role="admin"
         initialEmail={email}
         onClose={() => setShowEmailModal(false)}
-      />
-
-      {/* PHONE OTP MODAL */}
-      <PasswordResetModal
-        isOpen={showPhoneModal}
-        role="admin"
-        initialPhone={cleanAdminPhone}
-        onClose={() => setShowPhoneModal(false)}
-        onSuccess={(_, newPass) => {
-          if (newPass) {
-            setPassword(newPass);
-          }
-          setShowPhoneModal(false);
-        }}
       />
     </div>
   );
