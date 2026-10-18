@@ -1,0 +1,19 @@
+{
+  "tokens": [
+    {
+      "tokenHash": "61c661920fc4ded44446e9190db701b88fafc18996fb87ca7570caa891b262ee",
+      "rawCode": "C14AC8B2",
+      "email": "syedabsar99@gmail.com",
+      "role": "admin",
+      "expiresAt": 1792305141650,
+      "used": false,
+      "createdAt": 1792304241659
+    }
+  ],
+  "adminCreds": {
+    "email": "syedabsar99@gmail.com",
+    "password": "Absar@12345",
+    "updatedAt": "2026-10-17T16:42:01.658Z"
+  },
+  "memberCreds": {}
+}
