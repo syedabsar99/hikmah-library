@@ -87,7 +87,47 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   const [chatInput, setChatInput] = useState('');
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [sessionKey, setSessionKey] = useState<CryptoKey | null>(null);
+  const [unreadChatCounts, setUnreadChatCounts] = useState<{ total: number; bySender: Record<string, number> }>({
+    total: 0,
+    bySender: {},
+  });
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+
+  const refreshUnreadCounts = async () => {
+    if (!currentUser?.memberId) return;
+    try {
+      const counts = await DataService.getUnreadChatCounts(currentUser.memberId);
+      setUnreadChatCounts(counts);
+    } catch (err) {
+      console.warn('Error refreshing unread chat counts:', err);
+    }
+  };
+
+  const loadMessagesForPeer = async (peer: MemberProfile, key: CryptoKey, markSeen = true) => {
+    if (!currentUser?.memberId) return;
+    try {
+      const sessionId = [currentUser.memberId, peer.id].sort().join('--');
+      if (markSeen) {
+        await DataService.markMessagesSeen(sessionId, currentUser.memberId);
+      }
+      const rawMessages = await DataService.getChatMessages(sessionId);
+
+      const decrypted = await Promise.all(
+        rawMessages.map(async (msg) => {
+          try {
+            const text = await decryptMessage(msg.ciphertext, msg.iv, key);
+            return { ...msg, decryptedText: text };
+          } catch {
+            return { ...msg, decryptedText: '🔒 [Encrypted Message]' };
+          }
+        })
+      );
+
+      setChatMessages(decrypted);
+    } catch (err) {
+      console.error('Failed to load messages for peer', err);
+    }
+  };
 
   const loadMemberData = async () => {
     if (!currentUser?.memberId) return;
@@ -113,6 +153,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
       setAvailablePeers(
         allMembers.filter((m) => m.id !== currentUser.memberId && m.membershipStatus === 'Active')
       );
+      await refreshUnreadCounts();
     } finally {
       setIsRefreshing(false);
     }
@@ -150,7 +191,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     }
   }, [authMemberProfile]);
 
-  // Initialize E2E Chat Session with Administration
+  // Initialize E2E Chat Session with Administration / Peer
   const initChatSession = async (peer: MemberProfile) => {
     if (!currentUser?.memberId) return;
     setActiveChatPeer(peer);
@@ -160,20 +201,19 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
       const key = await deriveSessionKey(currentUser.memberId, peer.id);
       setSessionKey(key);
 
-      // 2. Fetch session messages (auto-purging messages older than 12 hours)
-      const sessionId = [currentUser.memberId, peer.id].sort().join('--');
-      await DataService.markMessagesSeen(sessionId, currentUser.memberId);
-      const messages = await DataService.getChatMessages(sessionId);
+      // 2. Clear unread count for this peer in state immediately
+      setUnreadChatCounts((prev) => {
+        const updatedBySender = { ...prev.bySender };
+        const cleared = updatedBySender[peer.id] || 0;
+        delete updatedBySender[peer.id];
+        return {
+          total: Math.max(0, prev.total - cleared),
+          bySender: updatedBySender,
+        };
+      });
 
-      // 3. Decrypt messages client-side
-      const decrypted = await Promise.all(
-        messages.map(async (msg) => {
-          const text = await decryptMessage(msg.ciphertext, msg.iv, key);
-          return { ...msg, decryptedText: text };
-        })
-      );
-
-      setChatMessages(decrypted);
+      // 3. Fetch session messages (auto-purging messages older than 12 hours) and mark seen
+      await loadMessagesForPeer(peer, key, true);
     } catch (err) {
       console.error('Failed to establish E2E encrypted session', err);
     }
@@ -185,6 +225,33 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     }
   }, [currentUser?.memberId]);
 
+  // Polling and real-time updates for chat and unread message notifications
+  useEffect(() => {
+    refreshUnreadCounts();
+
+    const handleChatEvent = () => {
+      refreshUnreadCounts();
+      if (isChatOpen && activeChatPeer && sessionKey) {
+        loadMessagesForPeer(activeChatPeer, sessionKey, true);
+      }
+    };
+
+    window.addEventListener('hikmah_chat_updated', handleChatEvent);
+    window.addEventListener('storage', handleChatEvent);
+    const unreadInterval = setInterval(() => {
+      refreshUnreadCounts();
+      if (isChatOpen && activeChatPeer && sessionKey) {
+        loadMessagesForPeer(activeChatPeer, sessionKey, true);
+      }
+    }, 2500);
+
+    return () => {
+      clearInterval(unreadInterval);
+      window.removeEventListener('hikmah_chat_updated', handleChatEvent);
+      window.removeEventListener('storage', handleChatEvent);
+    };
+  }, [currentUser?.memberId, isChatOpen, activeChatPeer?.id, sessionKey]);
+
   // Scroll to bottom when new messages arrive or chat opens
   useEffect(() => {
     if (isChatOpen) {
@@ -192,7 +259,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     }
   }, [isChatOpen, chatMessages.length]);
 
-  // Send E2E Encrypted Message with WhatsApp status progression (sent -> delivered -> seen)
+  // Send E2E Encrypted Message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !activeChatPeer || !sessionKey || !currentUser?.memberId) return;
@@ -219,20 +286,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
       setChatMessages((prev) => [...prev, { ...sentMsg, decryptedText: plaintext, status: 'sent' }]);
       setChatInput('');
 
-      // WhatsApp status progression simulation: 'sent' -> 'delivered' after 700ms -> 'seen' after 2000ms
+      // WhatsApp status progression: 'sent' -> 'delivered' after 500ms
       setTimeout(async () => {
         await DataService.updateMessageStatus(sentMsg.id, 'delivered');
         setChatMessages((prev) =>
           prev.map((m) => (m.id === sentMsg.id ? { ...m, status: 'delivered' } : m))
         );
-      }, 700);
-
-      setTimeout(async () => {
-        await DataService.updateMessageStatus(sentMsg.id, 'seen');
-        setChatMessages((prev) =>
-          prev.map((m) => (m.id === sentMsg.id ? { ...m, status: 'seen' } : m))
-        );
-      }, 2000);
+      }, 500);
     } catch (err) {
       console.error('Failed to encrypt and send message', err);
     } finally {
@@ -995,71 +1055,225 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
               style={{
                 padding: '32px',
                 borderRadius: 'var(--radius-xl)',
-                border: '1px solid rgba(217, 119, 6, 0.25)',
-                background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)',
+                border: unreadChatCounts.total > 0
+                  ? '2px solid rgba(239, 68, 68, 0.6)'
+                  : '1px solid rgba(217, 119, 6, 0.25)',
+                background: unreadChatCounts.total > 0
+                  ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.95) 55%, rgba(217, 119, 6, 0.08) 100%)'
+                  : 'linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)',
+                boxShadow: unreadChatCounts.total > 0
+                  ? '0 8px 32px rgba(239, 68, 68, 0.25)'
+                  : '0 8px 32px rgba(0, 0, 0, 0.3)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '24px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                flexDirection: 'column',
+                gap: '20px',
               }}
             >
-              <div style={{ maxWidth: '640px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                  <div
-                    style={{
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '12px',
-                      background: 'rgba(217, 119, 6, 0.15)',
-                      border: '1px solid rgba(217, 119, 6, 0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <MessageSquare size={22} color="var(--accent-gold)" />
+              {/* Unread Alert Banner if messages waiting */}
+              {unreadChatCounts.total > 0 && (
+                <div
+                  id="banner-unread-chat"
+                  style={{
+                    background: 'linear-gradient(90deg, #DC2626 0%, #B91C1C 100%)',
+                    borderRadius: '12px',
+                    padding: '12px 18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    color: '#FFFFFF',
+                    boxShadow: '0 4px 16px rgba(220, 38, 38, 0.35)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '800', fontSize: '0.94rem' }}>
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: '#FFF',
+                        boxShadow: '0 0 10px #FFF',
+                        display: 'inline-block',
+                      }}
+                    />
+                    <span>
+                      {unreadChatCounts.total} UNREAD PRIVATE MESSAGE{unreadChatCounts.total > 1 ? 'S' : ''} WAITING
+                    </span>
                   </div>
-                  <h2 style={{ fontSize: '1.4rem', margin: 0, color: '#FFFFFF', fontWeight: '800' }}>
-                    Private Encrypted Student Chat
-                  </h2>
-                </div>
-                <p style={{ margin: '0 0 14px 0', color: '#94A3B8', fontSize: '0.92rem', lineHeight: '1.6' }}>
-                  Confidential, end-to-end encrypted direct channel with the Chief Librarian, Administration, or fellow enrolled batch members.
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', fontSize: '0.78rem' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '3px 10px', borderRadius: '12px' }}>
-                    <ShieldCheck size={14} /> 256-Bit SubtleCrypto AES-GCM
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#F59E0B', background: 'rgba(245, 158, 11, 0.1)', padding: '3px 10px', borderRadius: '12px' }}>
-                    <Clock size={14} /> Auto-cleans after 12 Hours
-                  </span>
-                </div>
-              </div>
 
-              <button
-                type="button"
-                id="btn-start-private-chat"
-                onClick={() => {
-                  setIsChatOpen(true);
-                  initChatSession(activeChatPeer || adminPeer);
-                }}
-                className="btn-gold"
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {Object.entries(unreadChatCounts.bySender).map(([senderId, count]) => {
+                      const peer = availablePeers.find((p) => p.id === senderId) || (senderId === adminPeer.id ? adminPeer : null);
+                      const name = peer ? peer.fullName : `Member (${senderId})`;
+                      return (
+                        <button
+                          key={senderId}
+                          type="button"
+                          onClick={() => {
+                            if (peer) {
+                              setIsChatOpen(true);
+                              initChatSession(peer);
+                            }
+                          }}
+                          style={{
+                            background: '#FFFFFF',
+                            color: '#991B1B',
+                            border: 'none',
+                            padding: '6px 14px',
+                            borderRadius: '14px',
+                            fontWeight: '800',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                          }}
+                        >
+                          <span>Open Chat with {name}</span>
+                          <span
+                            style={{
+                              background: '#DC2626',
+                              color: '#FFFFFF',
+                              borderRadius: '50%',
+                              width: '20px',
+                              height: '20px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.74rem',
+                              fontWeight: '900',
+                            }}
+                          >
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div
                 style={{
-                  padding: '14px 30px',
-                  fontSize: '1rem',
-                  fontWeight: '800',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '10px',
-                  boxShadow: '0 8px 25px rgba(217, 119, 6, 0.4)',
-                  cursor: 'pointer',
-                  borderRadius: '12px',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '24px',
                 }}
               >
-                <MessageSquare size={20} /> Start Private Chat
-              </button>
+                <div style={{ maxWidth: '640px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                    <div
+                      style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '12px',
+                        background: unreadChatCounts.total > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(217, 119, 6, 0.15)',
+                        border: unreadChatCounts.total > 0 ? '1px solid rgba(239, 68, 68, 0.5)' : '1px solid rgba(217, 119, 6, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                      }}
+                    >
+                      <MessageSquare size={22} color={unreadChatCounts.total > 0 ? '#EF4444' : 'var(--accent-gold)'} />
+                      {unreadChatCounts.total > 0 && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: '-6px',
+                            right: '-6px',
+                            background: '#EF4444',
+                            color: '#FFFFFF',
+                            borderRadius: '50%',
+                            width: '20px',
+                            height: '20px',
+                            fontSize: '0.72rem',
+                            fontWeight: '900',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 0 8px rgba(239, 68, 68, 0.9)',
+                          }}
+                        >
+                          {unreadChatCounts.total}
+                        </span>
+                      )}
+                    </div>
+                    <h2 style={{ fontSize: '1.4rem', margin: 0, color: '#FFFFFF', fontWeight: '800' }}>
+                      Private Encrypted Student Chat
+                    </h2>
+                  </div>
+                  <p style={{ margin: '0 0 14px 0', color: '#94A3B8', fontSize: '0.92rem', lineHeight: '1.6' }}>
+                    Confidential, end-to-end encrypted direct channel with the Chief Librarian, Administration, or fellow enrolled batch members.
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', fontSize: '0.78rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '3px 10px', borderRadius: '12px' }}>
+                      <ShieldCheck size={14} /> 256-Bit SubtleCrypto AES-GCM
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#F59E0B', background: 'rgba(245, 158, 11, 0.1)', padding: '3px 10px', borderRadius: '12px' }}>
+                      <Clock size={14} /> Auto-cleans after 12 Hours
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  id="btn-start-private-chat"
+                  onClick={() => {
+                    setIsChatOpen(true);
+                    const unreadSenderId = Object.keys(unreadChatCounts.bySender)[0];
+                    if (unreadSenderId) {
+                      const peer = availablePeers.find((p) => p.id === unreadSenderId) || (unreadSenderId === adminPeer.id ? adminPeer : null);
+                      if (peer) {
+                        initChatSession(peer);
+                        return;
+                      }
+                    }
+                    initChatSession(activeChatPeer || adminPeer);
+                  }}
+                  className="btn-gold"
+                  style={{
+                    padding: '14px 30px',
+                    fontSize: '1rem',
+                    fontWeight: '800',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    boxShadow: unreadChatCounts.total > 0
+                      ? '0 8px 25px rgba(239, 68, 68, 0.5)'
+                      : '0 8px 25px rgba(217, 119, 6, 0.4)',
+                    cursor: 'pointer',
+                    borderRadius: '12px',
+                    background: unreadChatCounts.total > 0
+                      ? 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
+                      : undefined,
+                    border: unreadChatCounts.total > 0 ? '1px solid #F87171' : undefined,
+                  }}
+                >
+                  <MessageSquare size={20} />
+                  <span>Start Private Chat</span>
+                  {unreadChatCounts.total > 0 && (
+                    <span
+                      id="badge-chat-total-unread"
+                      style={{
+                        background: '#FFFFFF',
+                        color: '#DC2626',
+                        borderRadius: '12px',
+                        padding: '2px 8px',
+                        fontSize: '0.82rem',
+                        fontWeight: '900',
+                        marginLeft: '4px',
+                      }}
+                    >
+                      {unreadChatCounts.total}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           ) : (
             /* Open State: Dedicated Separate Chat View */
@@ -1201,15 +1415,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                         fontSize: '0.82rem',
                         width: '240px',
                         background: 'rgba(15, 23, 42, 0.95)',
-                        borderColor: 'rgba(217, 119, 6, 0.3)',
+                        borderColor: unreadChatCounts.total > 0 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(217, 119, 6, 0.3)',
                       }}
                     >
-                      <option value={adminPeer.id}>Chief Librarian &amp; Administration</option>
-                      {availablePeers.map((peer) => (
-                        <option key={peer.id} value={peer.id}>
-                          {peer.fullName} ({peer.phoneNumber || peer.id})
-                        </option>
-                      ))}
+                      <option value={adminPeer.id}>
+                        {(unreadChatCounts.bySender[adminPeer.id] || 0) > 0 ? `🔴 (${unreadChatCounts.bySender[adminPeer.id]} NEW) ` : ''}Chief Librarian &amp; Administration
+                      </option>
+                      {availablePeers.map((peer) => {
+                        const count = unreadChatCounts.bySender[peer.id] || 0;
+                        return (
+                          <option key={peer.id} value={peer.id}>
+                            {count > 0 ? `🔴 (${count} NEW) ` : ''}{peer.fullName} ({peer.phoneNumber || peer.id})
+                          </option>
+                        );
+                      })}
                     </select>
 
                     <button
@@ -1232,6 +1451,121 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                       <X size={16} />
                     </button>
                   </div>
+                </div>
+
+                {/* Direct Peer Quick-Switcher Pills Bar with Red Unread Badges */}
+                <div
+                  id="chat-peer-bar"
+                  style={{
+                    padding: '10px 22px',
+                    background: 'rgba(15, 23, 42, 0.9)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'thin',
+                  }}
+                >
+                  <span style={{ fontSize: '0.74rem', color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                    DIRECT CHANNELS:
+                  </span>
+
+                  {/* Admin Peer Chip */}
+                  <button
+                    type="button"
+                    onClick={() => initChatSession(adminPeer)}
+                    style={{
+                      background: activeChatPeer.id === adminPeer.id
+                        ? 'rgba(217, 119, 6, 0.25)'
+                        : 'rgba(255, 255, 255, 0.05)',
+                      border: activeChatPeer.id === adminPeer.id
+                        ? '1px solid var(--accent-gold)'
+                        : '1px solid rgba(255, 255, 255, 0.12)',
+                      color: activeChatPeer.id === adminPeer.id ? '#FBBF24' : '#E2E8F0',
+                      padding: '5px 12px',
+                      borderRadius: '16px',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <span>Chief Librarian</span>
+                    {(unreadChatCounts.bySender[adminPeer.id] || 0) > 0 && (
+                      <span
+                        style={{
+                          background: '#EF4444',
+                          color: '#FFFFFF',
+                          borderRadius: '10px',
+                          padding: '1px 7px',
+                          fontSize: '0.72rem',
+                          fontWeight: '900',
+                          boxShadow: '0 0 8px rgba(239, 68, 68, 0.9)',
+                        }}
+                      >
+                        {unreadChatCounts.bySender[adminPeer.id]}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Enrolled Members Chips */}
+                  {availablePeers.map((peer) => {
+                    const unread = unreadChatCounts.bySender[peer.id] || 0;
+                    const isActive = activeChatPeer.id === peer.id;
+                    return (
+                      <button
+                        key={peer.id}
+                        type="button"
+                        onClick={() => initChatSession(peer)}
+                        style={{
+                          background: isActive
+                            ? 'rgba(217, 119, 6, 0.25)'
+                            : unread > 0
+                            ? 'rgba(239, 68, 68, 0.18)'
+                            : 'rgba(255, 255, 255, 0.05)',
+                          border: isActive
+                            ? '1px solid var(--accent-gold)'
+                            : unread > 0
+                            ? '1px solid rgba(239, 68, 68, 0.6)'
+                            : '1px solid rgba(255, 255, 255, 0.12)',
+                          color: isActive ? '#FBBF24' : unread > 0 ? '#FCA5A5' : '#E2E8F0',
+                          padding: '5px 12px',
+                          borderRadius: '16px',
+                          fontSize: '0.78rem',
+                          fontWeight: unread > 0 || isActive ? '700' : '500',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.2s ease',
+                          boxShadow: unread > 0 ? '0 0 10px rgba(239, 68, 68, 0.3)' : 'none',
+                        }}
+                      >
+                        <span>{peer.fullName}</span>
+                        {unread > 0 && (
+                          <span
+                            className="badge-peer-unread"
+                            style={{
+                              background: '#EF4444',
+                              color: '#FFFFFF',
+                              borderRadius: '10px',
+                              padding: '1px 7px',
+                              fontSize: '0.72rem',
+                              fontWeight: '900',
+                              boxShadow: '0 0 10px rgba(239, 68, 68, 0.9)',
+                            }}
+                          >
+                            {unread}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Chat Messages Body */}

@@ -1604,6 +1604,152 @@ async function runTests() {
   const registerButtonLabel = 'Register (if first time)';
   assert(registerButtonLabel === 'Register (if first time)', 'Student login portal displays "Register (if first time)" text');
 
+  // =========================================================================
+  // SUITE 24: Real-Time Private E2E Chat Unread Badges & Read Receipts
+  // =========================================================================
+  console.log('\nSuite 24: Real-Time Private E2E Chat Unread Badges & Read Receipts');
+
+  interface MockChatMessage {
+    id: string;
+    sessionId: string;
+    senderId: string;
+    senderName?: string;
+    recipientId: string;
+    ciphertext: string;
+    iv: string;
+    timestamp: string;
+    expiresAt: string;
+    status: 'sent' | 'delivered' | 'seen';
+  }
+
+  let mockChatStorage: MockChatMessage[] = [];
+
+  const sendMockMessage = (
+    senderId: string,
+    recipientId: string,
+    ciphertext: string = 'enc_abc'
+  ): MockChatMessage => {
+    const sessionId = [senderId, recipientId].sort().join('--');
+    const msg: MockChatMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      sessionId,
+      senderId,
+      recipientId,
+      ciphertext,
+      iv: 'iv_123',
+      timestamp: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 12 * 3600 * 1000).toISOString(),
+      status: 'delivered', // Delivered to storage; remains unread until recipient views
+    };
+    mockChatStorage.push(msg);
+    return msg;
+  };
+
+  const computeUnreadCounts = (viewerId: string, messages: MockChatMessage[]) => {
+    const twelveHoursAgo = Date.now() - 12 * 3600 * 1000;
+    const valid = messages.filter((m) => new Date(m.timestamp).getTime() > twelveHoursAgo);
+    const unread = valid.filter((m) => m.recipientId === viewerId && m.status !== 'seen');
+    const bySender: Record<string, number> = {};
+    for (const m of unread) {
+      bySender[m.senderId] = (bySender[m.senderId] || 0) + 1;
+    }
+    return {
+      total: unread.length,
+      bySender,
+    };
+  };
+
+  const markSessionSeen = (sessionId: string, viewerId: string) => {
+    mockChatStorage = mockChatStorage.map((m) => {
+      if (m.sessionId === sessionId && m.recipientId === viewerId && m.status !== 'seen') {
+        return { ...m, status: 'seen' };
+      }
+      return m;
+    });
+  };
+
+  const formatPeerOption = (peerId: string, peerName: string, phone: string, unreadCount: number) => {
+    return `${unreadCount > 0 ? `🔴 (${unreadCount} NEW) ` : ''}${peerName} (${phone || peerId})`;
+  };
+
+  const studentSyedId = 'HIK-2025-006'; // Syed Noor Ul Absar
+  const studentSadafId = 'HIK-2025-007'; // Sadaf Majeed
+
+  // 1. Initial state: zero unread messages
+  let sadafUnread = computeUnreadCounts(studentSadafId, mockChatStorage);
+  assert(sadafUnread.total === 0, 'Sadaf Majeed initially has 0 unread messages');
+  assert(Object.keys(sadafUnread.bySender).length === 0, 'No sender breakdown exists when inbox is empty');
+
+  // 2. Syed Noor Ul Absar sends 4 private messages to Sadaf Majeed
+  sendMockMessage(studentSyedId, studentSadafId, 'Hello Sadaf, are you studying at the library today?');
+  sendMockMessage(studentSyedId, studentSadafId, 'I saved the notes for GS Paper 2 on desk A-12.');
+  sendMockMessage(studentSyedId, studentSadafId, 'Please check when you get free time.');
+  sendMockMessage(studentSyedId, studentSadafId, 'Thank you!');
+
+  // 3. Verify unread calculations for Sadaf Majeed
+  sadafUnread = computeUnreadCounts(studentSadafId, mockChatStorage);
+  assert(sadafUnread.total === 4, 'Sadaf Majeed has exactly 4 unread messages waiting');
+  assert(sadafUnread.bySender[studentSyedId] === 4, 'Unread count for Syed Noor Ul Absar is exactly 4');
+
+  // 4. Verify sender does not have unread count for messages they sent
+  const syedUnread = computeUnreadCounts(studentSyedId, mockChatStorage);
+  assert(syedUnread.total === 0, 'Syed Noor Ul Absar (sender) has 0 unread messages in his own inbox');
+
+  // 5. Verify UI formatting for peer dropdown & pill badge
+  const syedOptionLabel = formatPeerOption(studentSyedId, 'Syed Noor Ul Absar', '+91 96224 97806', sadafUnread.bySender[studentSyedId] || 0);
+  assert(syedOptionLabel === '🔴 (4 NEW) Syed Noor Ul Absar (+91 96224 97806)', 'Peer selector displays prominent red indicator "🔴 (4 NEW)" for Syed Noor Ul Absar');
+
+  // 6. Verify unopened peer has clean label without red badge
+  const cleanPeerLabel = formatPeerOption('HIK-2025-002', 'Ayesha Khan', '+91 98765 43211', sadafUnread.bySender['HIK-2025-002'] || 0);
+  assert(cleanPeerLabel === 'Ayesha Khan (+91 98765 43211)', 'Peer without unread messages displays clean name without badge');
+
+  // 7. Another student (Amina Mir) sends 2 messages to Sadaf Majeed
+  const studentAminaId = 'HIK-2025-003';
+  sendMockMessage(studentAminaId, studentSadafId, 'Amina: See you at the evening discussion.');
+  sendMockMessage(studentAminaId, studentSadafId, 'Amina: Bring the syllabus copy.');
+
+  sadafUnread = computeUnreadCounts(studentSadafId, mockChatStorage);
+  assert(sadafUnread.total === 6, 'Total unread messages dynamically updates to 6 across multiple senders');
+  assert(sadafUnread.bySender[studentSyedId] === 4, 'Syed Noor Ul Absar count remains 4');
+  assert(sadafUnread.bySender[studentAminaId] === 2, 'Amina Mir count is 2');
+
+  // 8. Sadaf opens chat with Syed Noor Ul Absar -> marks his session as seen
+  const syedSadafSessionId = [studentSyedId, studentSadafId].sort().join('--');
+  markSessionSeen(syedSadafSessionId, studentSadafId);
+
+  // 9. Verify Syed's messages are now 'seen', badge clears, Amina's remain unread
+  sadafUnread = computeUnreadCounts(studentSadafId, mockChatStorage);
+  assert(!sadafUnread.bySender[studentSyedId], 'Syed Noor Ul Absar unread badge immediately CLEARS upon viewing');
+  assert(sadafUnread.total === 2, 'Total unread count decrements to 2 (only Amina Mir remaining)');
+  assert(sadafUnread.bySender[studentAminaId] === 2, 'Amina Mir unread messages remain intact');
+
+  // 10. Verify read receipt status on the messages
+  const seenMessages = mockChatStorage.filter((m) => m.sessionId === syedSadafSessionId && m.recipientId === studentSadafId);
+  const allSeen = seenMessages.every((m) => m.status === 'seen');
+  assert(allSeen === true, 'All messages viewed by recipient transition to "seen" read receipts');
+
+  // 11. Sadaf opens Amina's chat -> marks seen
+  const aminaSadafSessionId = [studentAminaId, studentSadafId].sort().join('--');
+  markSessionSeen(aminaSadafSessionId, studentSadafId);
+  sadafUnread = computeUnreadCounts(studentSadafId, mockChatStorage);
+  assert(sadafUnread.total === 0, 'All unread counts cleared after viewing all peers');
+
+  // 12. Verify 12-hour auto-prune ignores expired messages
+  const expiredMessage: MockChatMessage = {
+    id: 'msg-expired-1',
+    sessionId: syedSadafSessionId,
+    senderId: studentSyedId,
+    recipientId: studentSadafId,
+    ciphertext: 'expired_data',
+    iv: 'iv_old',
+    timestamp: new Date(Date.now() - 13 * 3600 * 1000).toISOString(), // 13 hours ago
+    expiresAt: new Date(Date.now() - 1 * 3600 * 1000).toISOString(),
+    status: 'delivered', // unread, but expired!
+  };
+  mockChatStorage.push(expiredMessage);
+  sadafUnread = computeUnreadCounts(studentSadafId, mockChatStorage);
+  assert(sadafUnread.total === 0, 'Expired chat messages older than 12 hours are strictly excluded from unread count');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

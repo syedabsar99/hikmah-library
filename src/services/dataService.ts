@@ -1544,6 +1544,26 @@ export const DataService = {
     return valid.filter((m) => m.sessionId === sessionId);
   },
 
+  async getUnreadChatCounts(viewerId: string): Promise<{ total: number; bySender: Record<string, number> }> {
+    if (!viewerId) return { total: 0, bySender: {} };
+    const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
+    const twelveHoursAgo = Date.now() - 12 * 3600 * 1000;
+    // Auto-prune messages older than 12 hours
+    const valid = all.filter((m) => new Date(m.timestamp).getTime() > twelveHoursAgo);
+    if (valid.length !== all.length) {
+      saveLocal(KEYS.CHAT_MESSAGES, valid);
+    }
+    const unread = valid.filter((m) => m.recipientId === viewerId && m.status !== 'seen');
+    const bySender: Record<string, number> = {};
+    for (const m of unread) {
+      bySender[m.senderId] = (bySender[m.senderId] || 0) + 1;
+    }
+    return {
+      total: unread.length,
+      bySender,
+    };
+  },
+
   async sendChatMessage(message: Omit<ChatMessage, 'id' | 'timestamp' | 'expiresAt' | 'status'> & { status?: 'sent' | 'delivered' | 'seen' }): Promise<ChatMessage> {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     const newMessage: ChatMessage = {
@@ -1557,6 +1577,11 @@ export const DataService = {
 
     const updated = [...all, newMessage];
     saveLocal(KEYS.CHAT_MESSAGES, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
+        detail: { sessionId: newMessage.sessionId, senderId: newMessage.senderId, recipientId: newMessage.recipientId, action: 'sent' }
+      }));
+    }
     return newMessage;
   },
 
@@ -1572,6 +1597,11 @@ export const DataService = {
     });
     if (changed) {
       saveLocal(KEYS.CHAT_MESSAGES, updated);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
+          detail: { sessionId, viewerId, action: 'seen' }
+        }));
+      }
     }
   },
 
@@ -1579,12 +1609,22 @@ export const DataService = {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     const updated = all.map((m) => (m.id === messageId ? { ...m, status } : m));
     saveLocal(KEYS.CHAT_MESSAGES, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
+        detail: { messageId, status, action: 'status' }
+      }));
+    }
   },
 
   async clearChatSession(sessionId: string): Promise<void> {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     const remaining = all.filter((m) => m.sessionId !== sessionId);
     saveLocal(KEYS.CHAT_MESSAGES, remaining);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
+        detail: { sessionId, action: 'cleared' }
+      }));
+    }
   },
 
   // ---------------- CSV EXPORTS ----------------
