@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RealEmailAuth } from '../services/emailAuthService';
-import { Mail, AlertTriangle, CheckCircle2, X, RefreshCw, Send, Clock, Shield, KeyRound } from 'lucide-react';
+import { Mail, AlertTriangle, CheckCircle2, X, RefreshCw, Send, Clock, Shield } from 'lucide-react';
 
 interface EmailPasswordResetModalProps {
   isOpen: boolean;
@@ -19,8 +19,6 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [generatedResetUrl, setGeneratedResetUrl] = useState<string | null>(null);
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState<number>(0);
 
   // Initialize or reset form state when modal opens
@@ -28,8 +26,6 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
     if (isOpen) {
       setError(null);
       setSuccessMsg(null);
-      setGeneratedResetUrl(null);
-      setGeneratedCode(null);
       const email = initialEmail || '';
       setEmailInput(email);
 
@@ -60,7 +56,6 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccessMsg(null);
 
     const norm = RealEmailAuth.normalizeEmail(emailInput);
     if (!norm.isValid) {
@@ -84,14 +79,8 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
           : await RealEmailAuth.sendMemberResetEmail(norm.email);
 
       if (result.success) {
-        setSuccessMsg(result.message);
+        setSuccessMsg('A password reset link has been sent to your email. Please check your inbox and Spam folder.');
         setCooldown(60);
-        if (result.resetUrl) {
-          setGeneratedResetUrl(result.resetUrl);
-        }
-        if (result.rawCode) {
-          setGeneratedCode(result.rawCode);
-        }
       } else {
         setError(result.message || 'Failed to dispatch password reset request.');
         if (result.cooldownSeconds) {
@@ -174,7 +163,7 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
             {role === 'admin' ? 'Administrator Password Reset' : 'Student Password Reset'}
           </h3>
           <p style={{ color: '#94A3B8', fontSize: '0.84rem', margin: 0, lineHeight: '1.4' }}>
-            Enter your registered email address to receive an official, cryptographically verified password reset link.
+            Enter your registered email address to receive an official password reset link.
           </p>
         </div>
 
@@ -200,98 +189,30 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
           </div>
         )}
 
-        {/* Success Alert with Direct 1-Click Reset Action */}
+        {/* Clean Success Alert: Only tells user link was sent to their email */}
         {successMsg && (
           <div
             style={{
               marginBottom: '18px',
-              padding: '16px',
+              padding: '14px 16px',
               background: 'rgba(16, 185, 129, 0.15)',
               border: '1px solid #10B981',
               borderRadius: 'var(--radius-md)',
               fontSize: '0.84rem',
               color: '#6EE7B7',
               lineHeight: '1.5',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-              <CheckCircle2 size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#10B981' }} />
-              <div>
-                <strong style={{ display: 'block', color: '#FFFFFF', marginBottom: '2px' }}>
-                  Reset Request Dispatched Successfully
-                </strong>
-                {successMsg}
-                {generatedCode && (
-                  <div style={{ marginTop: '8px', fontSize: '0.82rem', color: '#FFFFFF' }}>
-                    Security Verification Code:{' '}
-                    <strong
-                      style={{
-                        letterSpacing: '0.12em',
-                        background: 'rgba(0, 0, 0, 0.45)',
-                        padding: '3px 8px',
-                        borderRadius: '4px',
-                        border: '1px solid rgba(212, 175, 55, 0.4)',
-                        color: 'var(--accent-gold)',
-                      }}
-                    >
-                      {generatedCode}
-                    </strong>
-                  </div>
-                )}
-              </div>
+            <CheckCircle2 size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#10B981' }} />
+            <div>
+              <strong style={{ display: 'block', color: '#FFFFFF', marginBottom: '2px' }}>
+                Link Sent to Email
+              </strong>
+              {successMsg}
             </div>
-
-            {generatedResetUrl && (
-              <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(16, 185, 129, 0.25)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <a
-                  href={generatedResetUrl}
-                  className="btn-gold"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    padding: '10px 20px',
-                    fontSize: '0.88rem',
-                    fontWeight: '700',
-                    textDecoration: 'none',
-                    borderRadius: 'var(--radius-pill)',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <KeyRound size={16} /> Open Password Reset Page Now →
-                </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(generatedResetUrl);
-                    alert('Password reset link copied to clipboard! You can paste it into any browser or tab.');
-                  }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    fontSize: '0.8rem',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)',
-                    background: 'rgba(212, 175, 55, 0.12)',
-                    border: '1px solid rgba(212, 175, 55, 0.3)',
-                    borderRadius: 'var(--radius-pill)',
-                    cursor: 'pointer',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  📋 Copy Reset Link to Clipboard
-                </button>
-                <div style={{ fontSize: '0.74rem', color: '#94A3B8', textAlign: 'center', marginTop: '4px' }}>
-                  Click the button above to set your password instantly, or use the link dispatched to your inbox.
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -335,27 +256,6 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
             </div>
           </div>
 
-          {/* Cooldown Display */}
-          {cooldown > 0 && (
-            <div
-              style={{
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '0.8rem',
-                color: 'var(--accent-gold)',
-                background: 'rgba(212, 175, 55, 0.1)',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid rgba(212, 175, 55, 0.2)',
-              }}
-            >
-              <Clock size={16} />
-              <span>Resend available in: <strong>{cooldown}s</strong></span>
-            </div>
-          )}
-
           <div
             style={{
               padding: '10px 12px',
@@ -372,7 +272,7 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
           >
             <Shield size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
             <span>
-              Reset links are single-use, expire automatically in 15 minutes, and must be clicked from your email inbox. Be sure to check your <strong>Spam folder</strong>.
+              Reset links are valid for 60 minutes and must be clicked from your email inbox. Be sure to check your <strong>Spam folder</strong>.
             </span>
           </div>
 
@@ -391,11 +291,15 @@ export const EmailPasswordResetModal: React.FC<EmailPasswordResetModalProps> = (
             >
               {loading ? (
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  <RefreshCw size={15} className="spin" /> Sending Password Reset Email...
+                  <RefreshCw size={15} className="spin" /> Sending Link...
                 </span>
               ) : cooldown > 0 ? (
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                   <Clock size={15} /> Wait {cooldown}s to Resend
+                </span>
+              ) : successMsg ? (
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  Resend Password Reset Link <Send size={15} />
                 </span>
               ) : (
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>

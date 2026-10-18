@@ -291,7 +291,6 @@ class RealEmailAuthService {
   private async dispatchRealEmail(
     email: string,
     resetUrl: string,
-    rawCode: string,
     role: 'admin' | 'member'
   ): Promise<void> {
     const roleName = role === 'admin' ? 'Administrator' : 'Student';
@@ -304,10 +303,7 @@ You requested a password reset for your ${roleName} account (${email}).
 Reset Link:
 ${resetUrl}
 
-Verification Code:
-${rawCode}
-
-Click the reset link above directly to set your new password. This link is valid for 60 minutes.
+Click the reset link above to set your new password. This link is valid for 60 minutes.
 If you did not request this password reset, you can safely ignore this message.
 
 — Hikmah Library Administration
@@ -372,7 +368,7 @@ If you did not request this password reset, you can safely ignore this message.
     const resetUrl = `${this.getBaseUrl()}/reset-password?oobCode=${encodeURIComponent(token)}`;
 
     // Dispatch real email
-    await this.dispatchRealEmail(norm.email, resetUrl, rawCode, 'admin');
+    await this.dispatchRealEmail(norm.email, resetUrl, 'admin');
 
     await DataService.addAuditLog(
       'ADMIN_PASSWORD_RESET',
@@ -431,7 +427,7 @@ If you did not request this password reset, you can safely ignore this message.
     const resetUrl = `${this.getBaseUrl()}/reset-password?oobCode=${encodeURIComponent(token)}`;
 
     // Dispatch real email
-    await this.dispatchRealEmail(norm.email, resetUrl, rawCode, 'member');
+    await this.dispatchRealEmail(norm.email, resetUrl, 'member');
 
     await DataService.addAuditLog(
       'MEMBER_PASSWORD_RESET',
