@@ -1357,6 +1357,69 @@ export const DataService = {
     return { success: true, newCount };
   },
 
+  async deleteWarning(
+    warningId: string,
+    adminName: string
+  ): Promise<{ success: boolean; newCount: number }> {
+    const warnings = await this.getWarnings();
+    const targetWarning = warnings.find((w) => w.id === warningId);
+    if (!targetWarning) return { success: false, newCount: 0 };
+
+    // 1. Permanently remove from warnings list in local storage
+    const remainingWarnings = warnings.filter((w) => w.id !== warningId);
+    saveLocal(KEYS.WARNINGS, remainingWarnings);
+
+    // 2. Remove from Firebase Firestore if configured
+    if (this.isLiveFirebase() && db) {
+      try {
+        await deleteDoc(doc(db, 'warning_records', warningId));
+      } catch (err) {
+        console.warn('Firebase deleteWarning error:', err);
+      }
+    }
+
+    // 3. Recalculate member's active warning count based on remaining active warnings
+    const member = await this.getMemberById(targetWarning.memberId);
+    const remainingActiveForMember = remainingWarnings.filter(
+      (w) => w.memberId === targetWarning.memberId && !w.isCorrected
+    );
+    const newCount = remainingActiveForMember.length;
+
+    await this.updateMember(
+      targetWarning.memberId,
+      {
+        warningCount: newCount,
+        ...(newCount < 10 && member?.membershipStatus === 'Review' ? { membershipStatus: 'Active' } : {}),
+      },
+      adminName
+    );
+
+    // 4. Record audit log
+    await this.addAuditLog(
+      'WARNING_DELETED',
+      'WARNING',
+      `Permanently deleted Disciplinary Warning #${targetWarning.warningNumber} for ${targetWarning.memberName} (${targetWarning.memberId}). New warning count: ${newCount}/10.`,
+      adminName,
+      targetWarning.memberId
+    );
+
+    // 5. Dispatch real-time events for open student portals and dashboards
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('hikmah_warnings_updated', {
+          detail: { warningId, memberId: targetWarning.memberId, newCount },
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('hikmah_member_updated', {
+          detail: { memberId: targetWarning.memberId, warningCount: newCount },
+        })
+      );
+    }
+
+    return { success: true, newCount };
+  },
+
   async confirmCancellationAt10Warnings(
     memberId: string,
     cancellationReason: string,

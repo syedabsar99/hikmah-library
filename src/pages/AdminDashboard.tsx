@@ -725,6 +725,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     alert('Warning voided and deducted from member record through audited correction.');
   };
 
+  const handleDeleteWarning = async (w: WarningRecord) => {
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete Disciplinary Warning #${w.warningNumber} for ${w.memberName} (${w.memberId})?\n\nThis will remove it from both the Admin Console and the student's portal immediately.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await DataService.deleteWarning(w.id, 'Chief Librarian');
+      if (res.success) {
+        await loadData();
+      } else {
+        alert('Failed to delete warning. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error deleting warning:', err);
+      alert('An error occurred while deleting the warning.');
+    }
+  };
+
   const handleConfirmCancellation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetMemberForCancel || !cancellationReason.trim()) {
@@ -2071,7 +2093,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                     <th>Severity</th>
                     <th>Issued By</th>
                     <th>Status</th>
-                    <th>Correction</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2101,18 +2123,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                         )}
                       </td>
                       <td>
-                        {!w.isCorrected && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {!w.isCorrected && (
+                            <button
+                              className="btn-outline"
+                              onClick={() => {
+                                setTargetWarningForCorrection(w);
+                                setShowCorrectWarningModal(true);
+                              }}
+                              style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            >
+                              Void / Correct
+                            </button>
+                          )}
                           <button
-                            className="btn-outline"
-                            onClick={() => {
-                              setTargetWarningForCorrection(w);
-                              setShowCorrectWarningModal(true);
+                            type="button"
+                            className="btn-danger-outline"
+                            title="Permanently delete warning"
+                            onClick={() => handleDeleteWarning(w)}
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: '0.75rem',
+                              color: '#EF4444',
+                              borderColor: 'rgba(239, 68, 68, 0.4)',
+                              background: 'rgba(239, 68, 68, 0.08)',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              cursor: 'pointer',
                             }}
-                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
                           >
-                            Void / Correct
+                            <Trash2 size={13} />
+                            <span>Delete</span>
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}

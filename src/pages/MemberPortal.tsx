@@ -147,7 +147,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
       }
       setMemberProfile(fresh);
       const warns = await DataService.getWarnings(currentUser.memberId);
-      setMyWarnings(warns);
+      setMyWarnings(warns.filter((w) => !w.isCorrected));
 
       const allMembers = await DataService.getMembers();
       setAvailablePeers(
@@ -174,12 +174,16 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     };
 
     window.addEventListener('hikmah_member_deleted', handleMemberDeleted);
+    window.addEventListener('hikmah_warnings_updated', loadMemberData);
+    window.addEventListener('hikmah_member_updated', loadMemberData);
     window.addEventListener('storage', loadMemberData);
     const interval = setInterval(loadMemberData, 3000);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('hikmah_member_deleted', handleMemberDeleted);
+      window.removeEventListener('hikmah_warnings_updated', loadMemberData);
+      window.removeEventListener('hikmah_member_updated', loadMemberData);
       window.removeEventListener('storage', loadMemberData);
     };
   }, [currentUser]);

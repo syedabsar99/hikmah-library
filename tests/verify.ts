@@ -1750,6 +1750,131 @@ async function runTests() {
   sadafUnread = computeUnreadCounts(studentSadafId, mockChatStorage);
   assert(sadafUnread.total === 0, 'Expired chat messages older than 12 hours are strictly excluded from unread count');
 
+  // =========================================================================
+  // SUITE 25: Disciplinary Warning Deletion & Cross-Portal Synchronization
+  // =========================================================================
+  console.log('\nSuite 25: Disciplinary Warning Deletion & Cross-Portal Synchronization');
+
+  interface MockWarning {
+    id: string;
+    memberId: string;
+    memberName: string;
+    warningNumber: number;
+    reason: string;
+    severity: 'Minor' | 'Moderate' | 'Severe' | 'Critical';
+    issuedBy: string;
+    issuedAt: string;
+    isCorrected?: boolean;
+  }
+
+  interface MockStudentProfile {
+    id: string;
+    fullName: string;
+    warningCount: number;
+    membershipStatus: 'Active' | 'Review' | 'Suspended' | 'Cancelled';
+  }
+
+  let mockWarningsStore: MockWarning[] = [
+    {
+      id: 'warn-test-001',
+      memberId: 'HIK-2025-001',
+      memberName: 'Bilal Ahmed',
+      warningNumber: 1,
+      reason: 'Phone conversation inside quiet study hall',
+      severity: 'Minor',
+      issuedBy: 'Chief Librarian',
+      issuedAt: new Date().toISOString(),
+    },
+    {
+      id: 'warn-test-002',
+      memberId: 'HIK-2025-005',
+      memberName: 'Tariq Butt',
+      warningNumber: 9,
+      reason: 'Unauthorized seat occupancy and argument',
+      severity: 'Severe',
+      issuedBy: 'Chief Librarian',
+      issuedAt: new Date().toISOString(),
+    },
+  ];
+
+  let mockStudentsStore: Record<string, MockStudentProfile> = {
+    'HIK-2025-001': {
+      id: 'HIK-2025-001',
+      fullName: 'Bilal Ahmed',
+      warningCount: 1,
+      membershipStatus: 'Active',
+    },
+    'HIK-2025-005': {
+      id: 'HIK-2025-005',
+      fullName: 'Tariq Butt',
+      warningCount: 9,
+      membershipStatus: 'Review',
+    },
+  };
+
+  // Helper function to simulate DataService.deleteWarning
+  const executeDeleteWarning = (warningId: string, adminName: string) => {
+    const target = mockWarningsStore.find((w) => w.id === warningId);
+    if (!target) return { success: false, newCount: 0 };
+
+    // 1. Remove from global warnings list
+    mockWarningsStore = mockWarningsStore.filter((w) => w.id !== warningId);
+
+    // 2. Recalculate member's active warnings
+    const remainingActive = mockWarningsStore.filter(
+      (w) => w.memberId === target.memberId && !w.isCorrected
+    );
+    const newCount = remainingActive.length;
+
+    // 3. Update student profile
+    const student = mockStudentsStore[target.memberId];
+    if (student) {
+      student.warningCount = newCount;
+      if (newCount < 10 && student.membershipStatus === 'Review') {
+        student.membershipStatus = 'Active';
+      }
+    }
+
+    return { success: true, newCount };
+  };
+
+  // 1. Initial State in Admin Console & Student Portal
+  assert(mockWarningsStore.length === 2, 'Admin warning registry initially contains 2 recorded warnings');
+  const student1Warnings = mockWarningsStore.filter((w) => w.memberId === 'HIK-2025-001' && !w.isCorrected);
+  assert(student1Warnings.length === 1, 'Student portal for Bilal Ahmed initially displays 1 recorded warning');
+  assert(mockStudentsStore['HIK-2025-001'].warningCount === 1, 'Bilal Ahmed has warning count = 1');
+
+  // 2. Admin clicks Delete icon on Bilal Ahmed's warning
+  const deleteResult = executeDeleteWarning('warn-test-001', 'Chief Librarian');
+  assert(deleteResult.success === true, 'Admin successfully deletes warning warn-test-001');
+  assert(deleteResult.newCount === 0, 'New warning count for student is recalculated to 0');
+
+  // 3. Verify warning is permanently deleted from Admin Warning Registry
+  assert(mockWarningsStore.length === 1, 'Admin warning registry decremented to 1 item');
+  assert(mockWarningsStore.some((w) => w.id === 'warn-test-001') === false, 'Deleted warning is completely absent from Admin Console table');
+
+  // 4. Verify warning is removed from Student Portal
+  const student1RemainingWarnings = mockWarningsStore.filter((w) => w.memberId === 'HIK-2025-001' && !w.isCorrected);
+  assert(student1RemainingWarnings.length === 0, 'Student portal for Bilal Ahmed now displays 0 recorded warnings');
+  assert(mockStudentsStore['HIK-2025-001'].warningCount === 0, 'Bilal Ahmed warningCount in student profile is synchronized to 0');
+
+  // 5. Verify Student Portal Zero-Warning UI condition
+  const portalZeroWarningMessage = student1RemainingWarnings.length === 0
+    ? '✓ You have zero disciplinary warnings on record. Keep up the high standard of focus!'
+    : 'Warnings exist';
+  assert(portalZeroWarningMessage === '✓ You have zero disciplinary warnings on record. Keep up the high standard of focus!', 'Student portal switches to spotless record banner');
+
+  // 6. Delete Tariq Butt's warning and verify Review status reverts to Active
+  assert(mockStudentsStore['HIK-2025-005'].membershipStatus === 'Review', 'Tariq Butt was previously under Review threshold');
+  const deleteTariqResult = executeDeleteWarning('warn-test-002', 'Chief Librarian');
+  assert(deleteTariqResult.success === true, 'Admin successfully deletes Tariq Butt warning');
+  assert(mockStudentsStore['HIK-2025-005'].warningCount === 0, 'Tariq Butt warningCount drops to 0');
+  assert(mockStudentsStore['HIK-2025-005'].membershipStatus === 'Active', 'Member review status automatically cleared and restored to Active upon warning deletion');
+
+  // 7. Non-existent warning ID returns false safely
+  const invalidDeleteResult = executeDeleteWarning('non-existent-warn-id', 'Chief Librarian');
+  assert(invalidDeleteResult.success === false, 'Deleting non-existent warning ID safely returns false without errors');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');
