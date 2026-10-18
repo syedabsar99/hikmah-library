@@ -7,13 +7,13 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tests](https://img.shields.io/badge/Test%20Suite-143%20Passing-success?style=for-the-badge)](https://github.com/syedabsar99/hikmah-library/actions)
+[![Tests](https://img.shields.io/badge/Test%20Suite-156%20Passing-success?style=for-the-badge)](https://github.com/syedabsar99/hikmah-library/actions)
 
 <p align="center">
   A state-of-the-art, 24/7 academic sanctuary and comprehensive library management platform engineered for competitive exam aspirants, medical scholars, civil service candidates, and university researchers.
 </p>
 
-[**Explore Live Website ↗**](https://syedabsar99.github.io/hikmah-library/) &nbsp;•&nbsp; [**Key Features**](#-key-features) &nbsp;•&nbsp; [**System Architecture**](#-system-architecture) &nbsp;•&nbsp; [**Facility Showcase**](#-campus--study-environment)
+[**Explore Live Website ↗**](https://syedabsar99.github.io/hikmah-library/) &nbsp;•&nbsp; [**Key Features**](#-key-features) &nbsp;•&nbsp; [**System Architecture**](#-system-architecture) &nbsp;•&nbsp; [**Setup Guide**](#-setup--deployment) &nbsp;•&nbsp; [**Facility Showcase**](#-campus--study-environment)
 
 ---
 
@@ -75,7 +75,9 @@
 * **Personalized Dashboard:** Live desk allocation, attendance records, fee status, and official announcements.
 * **Responsive Mobile Experience:** Built from the ground up for full smartphone usability with optimized touch targets.
 
-### 🔒 6. Enterprise-Grade Security Architecture
+### 🔒 6. Zero-Backdoor Security Architecture
+* **No Hardcoded Passwords:** No default production passwords shipped in source code. Secure initial master provisioning initializes administrative access.
+* **Zero Backdoor Pins:** Student access strictly validates against configured credentials; trivial pins (`1234`, `Member@123`) and phone number suffix fallbacks are permanently rejected.
 * **Single-Use Verification Tokens:** Cryptographic tokens with strict 15-minute expirations and SHA-256 validation.
 * **Role-Based Isolation:** Complete boundary enforcement between student records and administration consoles.
 * **Anti-Enumeration Protection:** Sanitized authentication responses to safeguard student and faculty privacy.
@@ -89,7 +91,8 @@ hikmah-library/
 ├── .github/workflows/        # Automated 24/7 GitHub Actions CI/CD pipeline
 ├── public/                   # Static assets, gallery photographs, 404 SPA fallback
 │   ├── images/gallery/       # Authentic campus photography
-│   └── 404.html              # GitHub Pages deep-routing handler
+│   ├── 404.html              # GitHub Pages deep-routing handler
+│   └── _redirects            # SPA redirect rule for Netlify / Cloudflare
 ├── src/
 │   ├── components/           # Navbar, Footer, Modals, OTP verification widgets
 │   ├── context/              # AuthContext with dynamic contact propagation
@@ -102,28 +105,50 @@ hikmah-library/
 │   │   └── ResetPassword.tsx # Secure single-use password recovery
 │   ├── services/             # DataService, real email dispatcher, OTP service
 │   └── index.css             # High-contrast, glassmorphic design system
-├── tests/                    # 17 automated test suites (143 test cases)
+├── tests/                    # 18 automated test suites (156 test cases)
 └── vite.config.ts            # Vite configuration with relative assets & API bridge
 ```
 
 ---
 
-## 💻 Technology Stack
+## 🚀 Setup & Deployment
 
-| Layer | Technologies |
-|---|---|
-| **Core Framework** | [React 19](https://react.dev/) & [TypeScript](https://www.typescriptlang.org/) |
-| **Build & Tooling** | [Vite 8](https://vitejs.dev/) |
-| **Styling & UI** | Vanilla CSS Design System with Glassmorphism & Micro-animations |
-| **Icons & Media** | [Lucide React](https://lucide.dev/) |
-| **Cryptography** | Web Cryptography API (SubtleCrypto SHA-256) |
-| **Deployment & CDN** | [GitHub Pages](https://pages.github.com/) via [GitHub Actions CI/CD](https://github.com/features/actions) |
+### Local Development Setup
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/syedabsar99/hikmah-library.git
+   cd hikmah-library
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the local development server:
+   ```bash
+   npm run dev
+   ```
+4. Run verification tests:
+   ```bash
+   npm test
+   ```
+
+### Optional: Cloud Firebase Integration
+To sync with Firebase Cloud Firestore & Firebase Auth:
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Enter your Firebase Spark plan project keys in `.env`.
+3. If `.env` is omitted, the application automatically runs in High-Performance Local Persistent Mode!
+
+### Deployment to GitHub Pages
+The repository includes a ready-to-run GitHub Actions workflow (`.github/workflows/deploy.yml`). Pushing commits to `main` automatically builds and publishes the production site to GitHub Pages with zero server costs.
 
 ---
 
 ## 🧪 Quality Assurance & Testing
 
-The application includes an automated test suite verifying role authorization, fee calculations, disciplinary warnings, and authentication workflows.
+The application includes an automated test suite verifying role authorization, fee calculations, disciplinary warnings, zero-backdoor authentication, and password recovery workflows.
 
 ```bash
 # Execute complete verification test suite
@@ -132,7 +157,7 @@ npm test
 
 ```
 ------------------------------------------------------
-TOTAL TESTS: 143 | PASSED: 143 | FAILED: 0
+TOTAL TESTS: 156 | PASSED: 156 | FAILED: 0
 ------------------------------------------------------
 ```
 

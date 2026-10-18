@@ -53,12 +53,13 @@ const AppContent: React.FC = () => {
   const handleNavigate = (view: string) => {
     setCurrentView(view);
     try {
+      const base = window.location.pathname.startsWith('/hikmah-library') ? '/hikmah-library' : '';
       if (view === 'home' || view === 'facilities' || view === 'gallery' || view === 'rules') {
-        window.history.pushState(null, '', '/');
+        window.history.pushState(null, '', `${base}/`);
       } else if (view === 'admin-login') {
-        window.history.pushState(null, '', '/admin/login');
+        window.history.pushState(null, '', `${base}/admin/login`);
       } else if (view === 'member-login') {
-        window.history.pushState(null, '', '/member/login');
+        window.history.pushState(null, '', `${base}/member/login`);
       }
     } catch {
       // fallback

@@ -1,41 +1,18 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
-import fs from 'fs'
-import path from 'path'
 
-const AUTH_STATE_FILE = path.resolve(__dirname, 'src/data/server_auth_state.json')
-const TUNNEL_URL_FILE = path.resolve(__dirname, 'src/data/tunnel_url.json')
-
-function readAuthState(): { tokens: any[]; adminCreds: any; memberCreds: Record<string, any> } {
-  try {
-    if (fs.existsSync(AUTH_STATE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(AUTH_STATE_FILE, 'utf-8'))
-      return { tokens: data.tokens || [], adminCreds: data.adminCreds || null, memberCreds: data.memberCreds || {} }
-    }
-  } catch (err) {
-    console.error('Error reading auth state:', err)
-  }
-  return { tokens: [], adminCreds: null, memberCreds: {} }
+interface TokenEntry {
+  tokenHash: string
+  rawCode: string
+  email: string
+  role: string
+  expiresAt: number
+  used: boolean
+  createdAt: number
 }
 
-function writeAuthState(state: { tokens: any[]; adminCreds: any; memberCreds: Record<string, any> }) {
-  try {
-    fs.mkdirSync(path.dirname(AUTH_STATE_FILE), { recursive: true })
-    fs.writeFileSync(AUTH_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8')
-  } catch (err) {
-    console.error('Error writing auth state:', err)
-  }
-}
-
-function getTunnelUrl(): string {
-  try {
-    if (fs.existsSync(TUNNEL_URL_FILE)) {
-      const data = JSON.parse(fs.readFileSync(TUNNEL_URL_FILE, 'utf-8'))
-      if (data && data.url) return data.url
-    }
-  } catch (err) {}
-  return ''
-}
+// In-memory token store for local development reset verification (no plaintext passwords saved to disk)
+const inMemoryTokens: TokenEntry[] = []
 
 function parseBody(req: any): Promise<any> {
   return new Promise((resolve) => {
@@ -72,21 +49,12 @@ function authBackendPlugin(): Plugin {
           }
         }
 
-        // 1. GET /api/auth/tunnel-url
-        if (url === '/api/auth/tunnel-url' && req.method === 'GET') {
-          res.setHeader('Content-Type', 'application/json')
-          const tunnelUrl = getTunnelUrl()
-          return res.end(JSON.stringify({ url: tunnelUrl }))
-        }
-
-        // 2. POST /api/auth/store-token
+        // 1. POST /api/auth/store-token
         if (url === '/api/auth/store-token' && req.method === 'POST') {
           const body = await parseBody(req)
           const { tokenHash, rawCode, email, role, expiresAt } = body
           if (tokenHash && email) {
-            const state = readAuthState()
-            const activeTokens = state.tokens.filter((t) => Date.now() < t.expiresAt && !t.used)
-            activeTokens.push({
+            inMemoryTokens.push({
               tokenHash,
               rawCode: rawCode || '',
               email: email.toLowerCase(),
@@ -95,8 +63,6 @@ function authBackendPlugin(): Plugin {
               used: false,
               createdAt: Date.now(),
             })
-            state.tokens = activeTokens
-            writeAuthState(state)
             res.setHeader('Content-Type', 'application/json')
             return res.end(JSON.stringify({ success: true }))
           }
@@ -105,7 +71,7 @@ function authBackendPlugin(): Plugin {
           return res.end(JSON.stringify({ error: 'Missing token data' }))
         }
 
-        // 3. POST /api/auth/verify-token
+        // 2. POST /api/auth/verify-token
         if (url === '/api/auth/verify-token' && req.method === 'POST') {
           const body = await parseBody(req)
           const { tokenHash, code } = body
@@ -114,9 +80,8 @@ function authBackendPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json')
             return res.end(JSON.stringify({ valid: false, error: 'Missing token hash or code' }))
           }
-          const state = readAuthState()
           const cleanCode = (code || '').toUpperCase()
-          const found = state.tokens.find(
+          const found = inMemoryTokens.find(
             (t) =>
               (tokenHash && t.tokenHash === tokenHash) ||
               (cleanCode && t.rawCode && t.rawCode.toUpperCase() === cleanCode)
@@ -137,7 +102,7 @@ function authBackendPlugin(): Plugin {
           return res.end(JSON.stringify({ valid: true, email: found.email, role: found.role }))
         }
 
-        // 4. POST /api/auth/confirm-reset
+        // 3. POST /api/auth/confirm-reset
         if (url === '/api/auth/confirm-reset' && req.method === 'POST') {
           const body = await parseBody(req)
           const { tokenHash, code, newPassword } = body
@@ -146,9 +111,8 @@ function authBackendPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json')
             return res.end(JSON.stringify({ success: false, error: 'Missing token or password' }))
           }
-          const state = readAuthState()
           const cleanCode = (code || '').toUpperCase()
-          const index = state.tokens.findIndex(
+          const index = inMemoryTokens.findIndex(
             (t) =>
               (tokenHash && t.tokenHash === tokenHash) ||
               (cleanCode && t.rawCode && t.rawCode.toUpperCase() === cleanCode)
@@ -157,7 +121,7 @@ function authBackendPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json')
             return res.end(JSON.stringify({ success: false, error: 'Invalid reset code' }))
           }
-          const tokenEntry = state.tokens[index]
+          const tokenEntry = inMemoryTokens[index]
           if (tokenEntry.used) {
             res.setHeader('Content-Type', 'application/json')
             return res.end(JSON.stringify({ success: false, error: 'Reset link already used' }))
@@ -167,44 +131,12 @@ function authBackendPlugin(): Plugin {
             return res.end(JSON.stringify({ success: false, error: 'Reset link has expired' }))
           }
 
-          // Mark token as used
+          // Mark token as burned/used immediately
           tokenEntry.used = true
-          state.tokens[index] = tokenEntry
+          inMemoryTokens[index] = tokenEntry
 
-          // Update credentials based on role
-          if (tokenEntry.role === 'admin' || tokenEntry.email === 'syedabsar99@gmail.com') {
-            state.adminCreds = {
-              email: tokenEntry.email,
-              password: newPassword,
-              updatedAt: new Date().toISOString(),
-            }
-          }
-
-          if (tokenEntry.role === 'member') {
-            state.memberCreds = state.memberCreds || {}
-            state.memberCreds[tokenEntry.email.toLowerCase()] = {
-              password: newPassword,
-              updatedAt: new Date().toISOString(),
-            }
-          }
-
-          writeAuthState(state)
           res.setHeader('Content-Type', 'application/json')
           return res.end(JSON.stringify({ success: true, email: tokenEntry.email }))
-        }
-
-        // 5. GET /api/auth/admin-creds
-        if (url === '/api/auth/admin-creds' && req.method === 'GET') {
-          const state = readAuthState()
-          res.setHeader('Content-Type', 'application/json')
-          return res.end(JSON.stringify({ adminCreds: state.adminCreds }))
-        }
-
-        // 6. GET /api/auth/member-creds
-        if (url.startsWith('/api/auth/member-creds') && req.method === 'GET') {
-          const state = readAuthState()
-          res.setHeader('Content-Type', 'application/json')
-          return res.end(JSON.stringify({ memberCreds: (state as any).memberCreds || {} }))
         }
 
         next()
@@ -220,6 +152,7 @@ export default defineConfig({
   server: {
     host: true, // Listen on all network interfaces
     port: 5173,
-    allowedHosts: true, // Allow Cloudflare Tunnel domains and mobile device hostnames
+    allowedHosts: true, // Allow custom hostnames and mobile dev test
   },
 })
+

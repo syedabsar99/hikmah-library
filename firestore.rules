@@ -28,9 +28,17 @@ service cloud.firestore {
     
     // Member Profiles collection
     // Members can ONLY read their own profile; Admin can read and write all member profiles
+    // Prevents self-promotion or tampering with membership status / warning count
     match /member_profiles/{memberDocId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.membershipStatus == resource.data.membershipStatus &&
+        request.resource.data.warningCount == resource.data.warningCount
+      );
     }
     
     // Attendance Records collection
@@ -54,6 +62,22 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
+
+    // Dynamic Basic Facilities & Infrastructure
+    // Read: Public visitors & members
+    // Write: Strictly Admin only
+    match /facilities/{facilityId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Dynamic Library Rules & Code of Conduct
+    // Read: Public visitors & members
+    // Write: Strictly Admin only
+    match /rules/{ruleId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
     
     // Administrative Audit Logs
     // Strictly Admin access only; ordinary members have zero access
@@ -63,8 +87,7 @@ service cloud.firestore {
     }
     
     // PRIVATE MEMBER-TO-MEMBER CHAT (STRICT PRIVACY ENFORCEMENT)
-    // The Admin role is STRICTLY DENIED access to chat sessions and ciphertext!
-    // Only the two specific participants can access their encrypted messages.
+    // Only the two specific participants can access their messages.
     match /chat_sessions/{sessionId} {
       allow read, write: if isAuthenticated() && (
         request.auth.uid in resource.data.participantUids ||
@@ -86,5 +109,11 @@ service cloud.firestore {
       );
       allow update: if false; // Messages cannot be altered
     }
+
+    // Default catch-all rule: Deny all unmatched collections and documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
+

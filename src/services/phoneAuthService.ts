@@ -596,7 +596,7 @@ class PhoneAuthManager {
     // Apply the update to the actual database / authentication store
     if (ticket.role === 'admin') {
       try {
-        let creds = { password: 'AdminHikmah#2025!', phone: OFFICIAL_ADMIN_PHONE };
+        let creds: any = { phone: OFFICIAL_ADMIN_PHONE, isProvisioned: true };
         const saved = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
         if (saved) {
           creds = { ...creds, ...JSON.parse(saved) };
@@ -604,6 +604,7 @@ class PhoneAuthManager {
 
         creds.password = newPassword;
         creds.phone = ticket.raw10;
+        creds.isProvisioned = true;
         localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(creds));
 
         await DataService.addAuditLog(

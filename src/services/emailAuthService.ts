@@ -218,6 +218,19 @@ class RealEmailAuthService {
   }
 
   /**
+   * Resolves the canonical base URL, respecting repository base paths (such as GitHub Pages /hikmah-library).
+   */
+  private getBaseUrl(): string {
+    try {
+      const origin = window.location.origin;
+      const isGhPages = window.location.pathname.startsWith('/hikmah-library');
+      return isGhPages ? `${origin}/hikmah-library` : origin;
+    } catch {
+      return '';
+    }
+  }
+
+  /**
    * Sends a genuine password reset email to an Administrator.
    * If Firebase is configured, calls Google Firebase Auth.
    * If in local mode, generates a cryptographically signed single-use reset link.
@@ -261,7 +274,7 @@ class RealEmailAuthService {
       if (auth) {
         try {
           const actionCodeSettings: ActionCodeSettings = {
-            url: `${window.location.origin}/reset-password`,
+            url: `${this.getBaseUrl()}/reset-password`,
             handleCodeInApp: true,
           };
 
@@ -311,8 +324,8 @@ class RealEmailAuthService {
     await this.storeLocalResetToken(rawToken, norm.email, 'admin');
     this.setCooldown(norm.email);
 
-    // Guaranteed canonical link pointing directly to active host (localhost or hosted domain)
-    const resetUrl = `${window.location.origin}/reset-password?oobCode=${rawToken}`;
+    // Guaranteed canonical link pointing directly to active host (localhost, custom domain, or GitHub Pages repo path)
+    const resetUrl = `${this.getBaseUrl()}/reset-password?oobCode=${rawToken}`;
 
     // Dispatch real email via FormSubmit directly to user's real email inbox
     await this.dispatchRealEmail(norm.email, resetUrl, rawCode, 'admin');
@@ -405,7 +418,7 @@ class RealEmailAuthService {
       if (auth) {
         try {
           const actionCodeSettings: ActionCodeSettings = {
-            url: `${window.location.origin}/reset-password`,
+            url: `${this.getBaseUrl()}/reset-password`,
             handleCodeInApp: true,
           };
 
@@ -435,7 +448,7 @@ class RealEmailAuthService {
     this.setCooldown(norm.email);
 
     // Guaranteed canonical link pointing directly to active host
-    const resetUrl = `${window.location.origin}/reset-password?oobCode=${rawToken}`;
+    const resetUrl = `${this.getBaseUrl()}/reset-password?oobCode=${rawToken}`;
 
     await this.dispatchRealEmail(norm.email, resetUrl, rawCode, 'member');
 

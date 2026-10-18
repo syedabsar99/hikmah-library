@@ -704,14 +704,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     const emailTrim = exAdminEmail.trim().toLowerCase();
     const passTrim = exAdminPassword;
 
-    let storedCreds: any = { password: 'AdminHikmah#2025!', phone: '9622497806', email: 'syedabsar99@gmail.com' };
+    let storedCreds: any = null;
     try {
       const item = localStorage.getItem('hikmah_admin_creds_v2');
       if (item) storedCreds = JSON.parse(item);
     } catch {}
 
-    const storedEmail = (storedCreds.email || adminEmail || 'syedabsar99@gmail.com').toLowerCase();
-    const storedPass = storedCreds.password || 'AdminHikmah#2025!';
+    const storedEmail = (storedCreds?.email || adminEmail || 'syedabsar99@gmail.com').toLowerCase();
+    const storedPass = storedCreds?.password;
+
+    if (!storedPass) {
+      setHandoverVerifyError('No active administrator password found. Please ensure administrative setup is complete.');
+      return;
+    }
 
     const isEmailValid =
       emailTrim === storedEmail ||

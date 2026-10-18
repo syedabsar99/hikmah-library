@@ -9,6 +9,8 @@ interface AuthContextType {
   currentMemberProfile: MemberProfile | null;
   isAdmin: boolean;
   isMember: boolean;
+  isAdminProvisioned: boolean;
+  provisionMasterAdmin: (email: string, password: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
   loginAdmin: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginMember: (emailOrIdentifier: string, passcode: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
@@ -45,16 +47,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
       if (item) {
         const parsed = JSON.parse(item);
-        if (!parsed.email) {
-          parsed.email = 'syedabsar99@gmail.com';
-          localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(parsed));
-        }
-        return parsed;
+        return {
+          password: parsed.password || null,
+          phone: parsed.phone || '9622497806',
+          email: parsed.email || 'syedabsar99@gmail.com',
+          name: parsed.name || 'Chief Administrator',
+          isProvisioned: Boolean(parsed.password),
+        };
       }
-      return { password: 'AdminHikmah#2025!', phone: '9622497806', email: 'syedabsar99@gmail.com', name: 'Chief Administrator' };
-    } catch {
-      return { password: 'AdminHikmah#2025!', phone: '9622497806', email: 'syedabsar99@gmail.com', name: 'Chief Administrator' };
-    }
+    } catch {}
+    return {
+      password: null,
+      phone: '9622497806',
+      email: 'syedabsar99@gmail.com',
+      name: 'Chief Administrator',
+      isProvisioned: false,
+    };
   };
 
   const [adminCredsState, setAdminCredsState] = useState(() => getAdminCredentials());
@@ -159,19 +167,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // Sync latest credentials from backend server (in case password was reset from a mobile phone)
-    try {
-      const serverRes = await fetch('/api/auth/admin-creds');
-      if (serverRes.ok) {
-        const data = await serverRes.json();
-        if (data && data.adminCreds && data.adminCreds.password) {
-          storedCreds.password = data.adminCreds.password;
-          storedCreds.email = data.adminCreds.email || storedCreds.email;
-          localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(storedCreds));
-        }
-      }
-    } catch {
-      // Offline fallback
+    if (!storedCreds.password || !storedCreds.isProvisioned) {
+      return {
+        success: false,
+        error: 'Administrator master password has not been provisioned yet. Please provision your master password.',
+      };
     }
 
     if (password !== storedCreds.password) {
@@ -194,6 +194,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'AUTH',
       `Administrator signed in using verified identity ${trimmedInput}.`,
       'Chief Administrator Syed Absar'
+    );
+
+    return { success: true };
+  };
+
+  // PROVISION MASTER ADMINISTRATOR PASSWORD (SECURE FIRST-TIME SETUP)
+  const provisionMasterAdmin = async (
+    email: string,
+    password: string,
+    phone?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const trimmedEmail = (email || '').trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      return { success: false, error: 'Please enter a valid administrator email address.' };
+    }
+
+    const policy = validatePasswordPolicy(password);
+    if (!policy.valid) {
+      return { success: false, error: 'Password Policy: ' + policy.errors.join(' • ') };
+    }
+
+    const newCreds = {
+      email: trimmedEmail,
+      password: password,
+      phone: phone ? phone.replace(/[^0-9]/g, '') : '9622497806',
+      name: 'Chief Administrator',
+      isProvisioned: true,
+      provisionedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(newCreds));
+    setAdminCredsState(newCreds);
+    window.dispatchEvent(new CustomEvent('hikmah_admin_creds_updated', { detail: newCreds }));
+
+    await DataService.addAuditLog(
+      'ADMIN_PROVISIONED',
+      'AUTH',
+      `Master Administrator credentials securely provisioned for ${trimmedEmail}.`,
+      'System Security'
     );
 
     return { success: true };
@@ -237,30 +276,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Sync credentials from backend server in case password was reset from a mobile phone
-    try {
-      const serverRes = await fetch('/api/auth/member-creds');
-      if (serverRes.ok) {
-        const data = await serverRes.json();
-        const memberCred = data?.memberCreds?.[member.email.toLowerCase()];
-        if (memberCred?.password) {
-          member.passcode = memberCred.password;
-        }
-      }
-    } catch {
-      // Offline fallback
+    // Password / Passcode verification strictly against member's registered password
+    if (!member.passcode) {
+      return {
+        success: false,
+        error: 'No password has been configured for this student account yet. Please switch to "New Student? Activate Account / Set Password" to configure your portal access.',
+      };
     }
 
-    // Password / Passcode verification
-    const validPasscodes = [
-      member.passcode,
-      '1234',
-      'Member@123',
-      'Absar@12345',
-      member.phoneNumber ? member.phoneNumber.replace(/[^0-9]/g, '').slice(-4) : '',
-    ].filter(Boolean);
-
-    if (!validPasscodes.includes(passcode.trim())) {
+    if (passcode.trim() !== member.passcode) {
       return {
         success: false,
         error: 'Incorrect password for this student account. Use "Forgot Password? Reset via Email Link" to set a new password.',
@@ -402,6 +426,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentMemberProfile,
         isAdmin: currentUser?.role === 'admin',
         isMember: currentUser?.role === 'member',
+        isAdminProvisioned: Boolean(adminCredsState.isProvisioned && adminCredsState.password),
+        provisionMasterAdmin,
         loginAdmin,
         loginMember,
         logout,
@@ -426,6 +452,8 @@ const defaultAuthContext: AuthContextType = {
   currentMemberProfile: null,
   isAdmin: false,
   isMember: false,
+  isAdminProvisioned: false,
+  provisionMasterAdmin: async () => ({ success: false, error: 'Authentication initializing' }),
   adminPhone: '9622497806',
   adminEmail: 'syedabsar99@gmail.com',
   adminName: 'Chief Administrator',

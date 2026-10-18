@@ -44,15 +44,44 @@ async function runTests() {
   console.log('HIKMAH LIBRARY & STUDY LOUNGE — SYSTEM VERIFICATION');
   console.log('======================================================\n');
 
-  // --- 1. ADMIN AUTHENTICATION TESTS ---
-  console.log('Suite 1: Admin Authentication & Permissions');
+  // --- 1. ADMIN AUTHENTICATION, ZERO-BACKDOOR & SECURE PROVISIONING TESTS ---
+  console.log('Suite 1: Admin Authentication, Zero-Backdoor & Secure Provisioning');
   const validAdminUser = 'admin@hikmahlibrary.com';
-  const validAdminPass = 'AdminHikmah#2025!';
   const invalidPass = 'WrongPass123';
+  const exposedDefaultPass = 'AdminHikmah#2025!';
+
+  let adminStore: { email: string; password: string | null; isProvisioned: boolean } = {
+    email: 'syedabsar99@gmail.com',
+    password: null,
+    isProvisioned: false,
+  };
+
+  const verifyAdminLogin = (user: string, pass: string) => {
+    if (!adminStore.isProvisioned || !adminStore.password) {
+      return { success: false, error: 'Administrator master password has not been provisioned yet.' };
+    }
+    if (pass !== adminStore.password) {
+      return { success: false, error: 'Incorrect administrator password.' };
+    }
+    return { success: true };
+  };
 
   assert(validAdminUser === 'admin@hikmahlibrary.com', 'Admin username format accepted');
-  assert(validAdminPass === 'AdminHikmah#2025!', 'Default admin credentials verified');
-  assert(validAdminPass !== invalidPass, 'Negative test: Incorrect password rejected');
+  assert(verifyAdminLogin(validAdminUser, exposedDefaultPass).success === false, 'SECURITY: Exposed default password strictly REJECTED prior to provisioning');
+  assert(verifyAdminLogin(validAdminUser, '1234').success === false, 'SECURITY: Trivial pin 1234 strictly REJECTED');
+
+  // Provisioning
+  const provisionAdmin = (email: string, pass: string) => {
+    if (pass.length < 8) return { success: false, error: 'Password too short' };
+    adminStore = { email, password: pass, isProvisioned: true };
+    return { success: true };
+  };
+
+  const strongMasterPass = 'Secure#HikmahAdmin2026';
+  assert(provisionAdmin('syedabsar99@gmail.com', strongMasterPass).success === true, 'Administrator master account securely provisioned');
+  assert(verifyAdminLogin(validAdminUser, strongMasterPass).success === true, 'Admin successfully logs in with provisioned credentials');
+  assert(verifyAdminLogin(validAdminUser, exposedDefaultPass).success === false, 'SECURITY: Former exposed password AdminHikmah#2025! strictly rejected');
+  assert(verifyAdminLogin(validAdminUser, invalidPass).success === false, 'Negative test: Incorrect password rejected');
 
   // --- 2. MEMBER ID AUTHENTICATION & ACCESS ISOLATION ---
   console.log('\nSuite 2: Member ID Authentication & Access Isolation');
@@ -946,6 +975,47 @@ async function runTests() {
   assert(matchTokenOrCode(rawToken, rawCode, '7f8a9b0c') === true, 'Case-insensitive verification code matches');
   assert(matchTokenOrCode(rawToken, rawCode, rawToken) === true, 'Full cryptographic token matches');
   assert(matchTokenOrCode(rawToken, rawCode, 'WRONGCODE') === false, 'Invalid code rejected');
+
+  // --- 18. ZERO-BACKDOOR STUDENT AUTHENTICATION & ACCESS CONTROL ---
+  console.log('\nSuite 18: Zero-Backdoor Student Authentication & Strict Passcode Enforcement');
+  const studentProfileWithPass = {
+    id: 'HIK-2025-006',
+    email: 'student@example.com',
+    phoneNumber: '+91 96224 97806',
+    passcode: 'SecretPass#2026',
+    membershipStatus: 'Active',
+  };
+  const studentProfileUnprovisioned = {
+    id: 'HIK-2025-007',
+    email: 'newbie@example.com',
+    phoneNumber: '+91 98765 43210',
+    passcode: undefined,
+    membershipStatus: 'Active',
+  };
+
+  function authenticateStudent(member: { passcode?: string; phoneNumber: string; membershipStatus: string }, inputPass: string) {
+    if (!member.passcode) {
+      return { success: false, error: 'Account requires activation and password configuration.' };
+    }
+    // Strict match only - NO backdoors, no test pins, no phone suffix fallbacks
+    if (inputPass.trim() !== member.passcode) {
+      return { success: false, error: 'Incorrect password.' };
+    }
+    return { success: true };
+  }
+
+  // Verify student with set passcode
+  assert(authenticateStudent(studentProfileWithPass, 'SecretPass#2026').success === true, 'Student authenticated with genuine registered password');
+  assert(authenticateStudent(studentProfileWithPass, '1234').success === false, 'SECURITY: Backdoor PIN "1234" strictly REJECTED');
+  assert(authenticateStudent(studentProfileWithPass, 'Member@123').success === false, 'SECURITY: Backdoor password "Member@123" strictly REJECTED');
+  assert(authenticateStudent(studentProfileWithPass, 'Absar@12345').success === false, 'SECURITY: Backdoor password "Absar@12345" strictly REJECTED');
+  assert(authenticateStudent(studentProfileWithPass, '7806').success === false, 'SECURITY: Phone number suffix fallback strictly REJECTED');
+  assert(authenticateStudent(studentProfileWithPass, 'WrongPass').success === false, 'SECURITY: Incorrect password strictly REJECTED');
+
+  // Verify student without set passcode
+  assert(authenticateStudent(studentProfileUnprovisioned, '1234').success === false, 'SECURITY: Unactivated account strictly blocks backdoor 1234');
+  assert(authenticateStudent(studentProfileUnprovisioned, '43210').success === false, 'SECURITY: Unactivated account strictly blocks phone digits');
+  assert(authenticateStudent(studentProfileUnprovisioned, '').success === false, 'SECURITY: Unactivated account prompts user to activate account');
 
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);

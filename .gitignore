@@ -12,6 +12,21 @@ dist
 dist-ssr
 *.local
 
+# Environment variables & secrets (CRITICAL)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.staging
+
+# Explicitly allow safe example template
+!.env.example
+
+# Local auth server state & tunnel data
+src/data/*.json
+!src/data/.gitkeep
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -23,3 +38,4 @@ dist-ssr
 *.sln
 *.sw?
 cloudflared.exe
+
