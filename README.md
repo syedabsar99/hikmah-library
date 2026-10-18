@@ -3,7 +3,7 @@
 # 📖 Hikmah Library & Study Lounge
 ### *Where Wisdom Meets Focus*
 
-[![Live Deployment](https://img.shields.io/badge/Live%20Website-24%2F7%20Available-brightgreen?style=for-the-badge&logo=github)](https://syedabsar99.github.io/hikmah-library/)
+[![Live Deployment](https://img.shields.io/badge/Live%20Website-24%2F7%20Available-brightgreen?style=for-the-badge&logo=vercel)](https://hikmah-library.vercel.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
@@ -13,7 +13,7 @@
   A state-of-the-art, 24/7 academic sanctuary and comprehensive library management platform engineered for competitive exam aspirants, medical scholars, civil service candidates, and university researchers.
 </p>
 
-[**Explore Live Website ↗**](https://syedabsar99.github.io/hikmah-library/) &nbsp;•&nbsp; [**Key Features**](#-key-features) &nbsp;•&nbsp; [**System Architecture**](#-system-architecture) &nbsp;•&nbsp; [**Setup Guide**](#-setup--deployment) &nbsp;•&nbsp; [**Facility Showcase**](#-campus--study-environment)
+[**Explore Live Website ↗**](https://hikmah-library.vercel.app) &nbsp;•&nbsp; [**Key Features**](#-key-features) &nbsp;•&nbsp; [**System Architecture**](#-system-architecture) &nbsp;•&nbsp; [**Setup Guide**](#-setup--deployment) &nbsp;•&nbsp; [**Facility Showcase**](#-campus--study-environment)
 
 ---
 

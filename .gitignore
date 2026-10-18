@@ -39,3 +39,5 @@ src/data/*.json
 *.sw?
 cloudflared.exe
 
+
+.vercel
