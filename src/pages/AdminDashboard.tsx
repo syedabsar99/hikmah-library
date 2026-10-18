@@ -3,12 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { DataService, calculateFeeStatus } from '../services/dataService';
 import { WarningMeter } from '../components/WarningMeter';
 import { PasswordResetModal } from '../components/PasswordResetModal';
+import { getAssetUrl } from '../utils/assets';
 import type {
   MemberProfile,
   WarningRecord,
   Announcement,
   LibraryFacility,
   LibraryRule,
+  CarouselPhoto,
 } from '../types';
 import {
   LayoutDashboard,
@@ -38,7 +40,52 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
+  Camera,
 } from 'lucide-react';
+
+// Process uploaded image file into web-optimized Base64 Data URL (stored permanently in website)
+const processImageFile = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_WIDTH = 1400;
+        const MAX_HEIGHT = 900;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 interface AdminDashboardProps {
   onNavigate?: (view: string) => void;
@@ -56,6 +103,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     | 'announcements'
     | 'facilities'
     | 'rules'
+    | 'carousel'
     | 'registration'
     | 'settings'
   >('dashboard');
@@ -68,6 +116,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [facilities, setFacilities] = useState<LibraryFacility[]>([]);
   const [rules, setRules] = useState<LibraryRule[]>([]);
+  const [carouselPhotos, setCarouselPhotos] = useState<CarouselPhoto[]>([]);
+
+  // Carousel Photos Management State (Max 8 Strictly Enforced)
+  const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
+  const [showReplacePhotoModal, setShowReplacePhotoModal] = useState(false);
+  const [targetPhotoForReplace, setTargetPhotoForReplace] = useState<CarouselPhoto | null>(null);
+  const [showDeletePhotoModal, setShowDeletePhotoModal] = useState(false);
+  const [targetPhotoForDelete, setTargetPhotoForDelete] = useState<CarouselPhoto | null>(null);
+
+  const [newPhotoTitle, setNewPhotoTitle] = useState('');
+  const [newPhotoCaption, setNewPhotoCaption] = useState('');
+  const [newPhotoBase64, setNewPhotoBase64] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+
+  const [replacePhotoTitle, setReplacePhotoTitle] = useState('');
+  const [replacePhotoCaption, setReplacePhotoCaption] = useState('');
+  const [replacePhotoBase64, setReplacePhotoBase64] = useState('');
 
   // Facility Management Modal State
   const [showFacilityModal, setShowFacilityModal] = useState(false);
@@ -234,7 +300,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   // Fetch all live records
   const loadData = async () => {
     try {
-      const [m, , w, ann, , facs, rls] = await Promise.all([
+      const [m, , w, ann, , facs, rls, cPhotos] = await Promise.all([
         DataService.getMembers(),
         DataService.getAttendance(),
         DataService.getWarnings(),
@@ -242,12 +308,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         DataService.getAuditLogs(),
         DataService.getFacilities(),
         DataService.getRules(),
+        DataService.getCarouselPhotos(),
       ]);
       setMembers(m);
       setWarnings(w);
       setAnnouncements(ann);
       setFacilities(facs);
       setRules(rls);
+      setCarouselPhotos(cPhotos);
     } catch (err) {
       console.error('Failed to load administrative dataset', err);
     }
@@ -359,6 +427,142 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const handleDeleteRule = async (id: string, title: string) => {
     if (window.confirm(`Are you sure you want to delete rule "${title}"?`)) {
       await DataService.deleteRule(id, 'Chief Librarian');
+      await loadData();
+    }
+  };
+
+  // ---------------- CAROUSEL PHOTO HANDLERS (MAX 8 PHOTOS) ----------------
+  const handleUploadPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>, isReplace: boolean = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setPhotoUploadError(null);
+      const dataUrl = await processImageFile(file);
+      if (isReplace) {
+        setReplacePhotoBase64(dataUrl);
+      } else {
+        setNewPhotoBase64(dataUrl);
+      }
+    } catch {
+      setPhotoUploadError('Failed to process image file. Please choose another image.');
+    }
+  };
+
+  const handleSaveNewPhoto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhotoUploadError(null);
+    if (!newPhotoBase64) {
+      setPhotoUploadError('Please select a photo file from your device.');
+      return;
+    }
+    if (!newPhotoTitle.trim() || !newPhotoCaption.trim()) {
+      setPhotoUploadError('Photo title and caption are required.');
+      return;
+    }
+    if (carouselPhotos.length >= 8) {
+      setPhotoUploadError('Strict limit of 8 photos reached. You must delete an existing photo first to free up a slot.');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const res = await DataService.addCarouselPhoto(
+        {
+          src: newPhotoBase64,
+          title: newPhotoTitle.trim(),
+          caption: newPhotoCaption.trim(),
+        },
+        'Chief Librarian'
+      );
+      if (!res.success) {
+        setPhotoUploadError(res.error || 'Failed to add photo.');
+        return;
+      }
+      setShowAddPhotoModal(false);
+      setNewPhotoBase64('');
+      setNewPhotoTitle('');
+      setNewPhotoCaption('');
+      await loadData();
+    } catch (err: any) {
+      setPhotoUploadError(err?.message || 'Error uploading photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleOpenReplacePhoto = (photo: CarouselPhoto) => {
+    setTargetPhotoForReplace(photo);
+    setReplacePhotoTitle(photo.title);
+    setReplacePhotoCaption(photo.caption);
+    setReplacePhotoBase64('');
+    setPhotoUploadError(null);
+    setShowReplacePhotoModal(true);
+  };
+
+  const handleSaveReplacePhoto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetPhotoForReplace) return;
+    setPhotoUploadError(null);
+    if (!replacePhotoTitle.trim() || !replacePhotoCaption.trim()) {
+      setPhotoUploadError('Photo title and caption are required.');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const updates: Partial<CarouselPhoto> = {
+        title: replacePhotoTitle.trim(),
+        caption: replacePhotoCaption.trim(),
+      };
+      if (replacePhotoBase64) {
+        updates.src = replacePhotoBase64;
+      }
+      const res = await DataService.replaceCarouselPhoto(
+        targetPhotoForReplace.id,
+        updates,
+        'Chief Librarian'
+      );
+      if (!res.success) {
+        setPhotoUploadError(res.error || 'Failed to replace photo.');
+        return;
+      }
+      setShowReplacePhotoModal(false);
+      setTargetPhotoForReplace(null);
+      setReplacePhotoBase64('');
+      await loadData();
+    } catch (err: any) {
+      setPhotoUploadError(err?.message || 'Error updating photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleOpenDeletePhoto = (photo: CarouselPhoto) => {
+    setTargetPhotoForDelete(photo);
+    setShowDeletePhotoModal(true);
+  };
+
+  const handleConfirmDeletePhoto = async () => {
+    if (!targetPhotoForDelete) return;
+    try {
+      const res = await DataService.deleteCarouselPhoto(targetPhotoForDelete.id, 'Chief Librarian');
+      if (!res.success) {
+        alert(res.error || 'Failed to delete photo.');
+        return;
+      }
+      setShowDeletePhotoModal(false);
+      setTargetPhotoForDelete(null);
+      await loadData();
+    } catch (err: any) {
+      alert(err?.message || 'Error deleting photo.');
+    }
+  };
+
+  const handleResetDefaultCarouselPhotos = async () => {
+    if (
+      window.confirm(
+        'Restore Original 8 Campus Gallery Photos?\n\nThis will reset the carousel to the original authentic campus photos of Hikmah Library. Any custom uploaded photos will be replaced.'
+      )
+    ) {
+      await DataService.resetToDefaultCarouselPhotos('Chief Librarian');
       await loadData();
     }
   };
@@ -990,6 +1194,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             { id: 'announcements', label: 'News & Notices', icon: <Megaphone size={18} /> },
             { id: 'facilities', label: 'Facilities & Infra', icon: <Award size={18} />, badge: facilities.length },
             { id: 'rules', label: 'Rules & Conduct', icon: <Flame size={18} />, badge: rules.length },
+            { id: 'carousel', label: 'Photo Carousel (Max 8)', icon: <Camera size={18} />, badge: `${carouselPhotos.length}/8`, badgeColor: carouselPhotos.length >= 8 ? '#EF4444' : 'rgba(245, 158, 11, 0.2)' },
             { id: 'registration', label: 'Registration Review', icon: <UserX size={18} />, badge: reviewMembers, badgeColor: '#EF4444' },
             { id: 'settings', label: 'System & Handover', icon: <Settings size={18} /> },
           ].map((item) => (
@@ -1017,7 +1222,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </span>
                 <span>{item.label}</span>
               </div>
-              {item.badge !== undefined && item.badge > 0 && (
+              {item.badge !== undefined && (typeof item.badge === 'number' ? item.badge > 0 : Boolean(item.badge)) && (
                 <span
                   style={{
                     fontSize: '0.72rem',
@@ -1062,6 +1267,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               {activeTab === 'fees' && 'Membership Fee & Expiry Tracker'}
               {activeTab === 'warnings' && 'Disciplinary Warning Management (Out of 10)'}
               {activeTab === 'announcements' && 'Public News & Policy Announcements'}
+              {activeTab === 'facilities' && 'Library Facilities & Basic Infrastructure'}
+              {activeTab === 'rules' && 'Rules, Regulations & Code of Conduct'}
+              {activeTab === 'carousel' && 'Photo Carousel & Visual Tour Manager (Strictly Max 8 Photos)'}
               {activeTab === 'registration' && 'Registration Review & Cancellation Queue'}
               {activeTab === 'settings' && 'System Configuration & Owner Handover'}
             </h1>
@@ -2185,7 +2393,332 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
         )}
 
-        {/* TAB 8: REGISTRATION STATUS & CANCELLATIONS */}
+        {/* TAB 8: CAROUSEL PHOTO MANAGER (STRICT MAX 8 PHOTOS) */}
+        {activeTab === 'carousel' && (
+          <div>
+            {/* Top Toolbar Strip */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '16px',
+                marginBottom: '24px',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ fontSize: '1.5rem', color: '#FFFFFF', margin: 0, fontWeight: '800' }}>
+                    Campus Photo Carousel
+                  </h2>
+                  <span
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 'var(--radius-pill)',
+                      fontSize: '0.82rem',
+                      fontWeight: '800',
+                      letterSpacing: '0.04em',
+                      background:
+                        carouselPhotos.length >= 8
+                          ? 'rgba(239, 68, 68, 0.2)'
+                          : 'rgba(16, 185, 129, 0.2)',
+                      border: `1px solid ${
+                        carouselPhotos.length >= 8 ? '#EF4444' : '#10B981'
+                      }`,
+                      color: carouselPhotos.length >= 8 ? '#FCA5A5' : '#6EE7B7',
+                    }}
+                  >
+                    {carouselPhotos.length} / 8 Photos{' '}
+                    {carouselPhotos.length >= 8 ? '(Limit Reached)' : 'Active'}
+                  </span>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: '4px 0 0 0' }}>
+                  Manage the rotating photo carousel displayed on the public homepage.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={handleResetDefaultCarouselPhotos}
+                  title="Restore original 8 campus pictures"
+                  style={{ fontSize: '0.86rem' }}
+                >
+                  <RefreshCw size={15} /> Restore Default 8 Photos
+                </button>
+
+                <button
+                  id="admin-upload-carousel-photo-btn"
+                  type="button"
+                  className={carouselPhotos.length >= 8 ? 'btn-outline' : 'btn-gold'}
+                  disabled={carouselPhotos.length >= 8}
+                  onClick={() => {
+                    setPhotoUploadError(null);
+                    setNewPhotoBase64('');
+                    setNewPhotoTitle('');
+                    setNewPhotoCaption('');
+                    setShowAddPhotoModal(true);
+                  }}
+                  title={
+                    carouselPhotos.length >= 8
+                      ? 'Maximum 8 photos reached. Delete an existing photo first to free up a slot.'
+                      : 'Upload a new photo'
+                  }
+                  style={{
+                    opacity: carouselPhotos.length >= 8 ? 0.6 : 1,
+                    cursor: carouselPhotos.length >= 8 ? 'not-allowed' : 'pointer',
+                    fontSize: '0.88rem',
+                    fontWeight: '700',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Plus size={16} /> Upload New Photo ({carouselPhotos.length}/8)
+                </button>
+              </div>
+            </div>
+
+            {/* Strict 8-Photo Limit Policy & Permanent Storage Explanation Banner */}
+            <div
+              className="glass-panel"
+              style={{
+                padding: '18px 24px',
+                borderRadius: '16px',
+                marginBottom: '26px',
+                border:
+                  carouselPhotos.length >= 8
+                    ? '1.5px solid rgba(245, 158, 11, 0.5)'
+                    : '1.5px solid rgba(16, 185, 129, 0.35)',
+                background:
+                  carouselPhotos.length >= 8
+                    ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)'
+                    : 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    background:
+                      carouselPhotos.length >= 8
+                        ? 'rgba(245, 158, 11, 0.2)'
+                        : 'rgba(16, 185, 129, 0.2)',
+                    color:
+                      carouselPhotos.length >= 8 ? 'var(--accent-gold)' : '#34D399',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Camera size={20} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      color:
+                        carouselPhotos.length >= 8
+                          ? 'var(--accent-gold-light)'
+                          : '#6EE7B7',
+                      fontWeight: '800',
+                      fontSize: '0.96rem',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {carouselPhotos.length >= 8
+                      ? '⚠️ Maximum Limit Reached (Strictly 8 Photos in Carousel)'
+                      : `✅ Photo Slots Available: ${8 - carouselPhotos.length} / 8 slots free`}
+                  </div>
+                  <p
+                    style={{
+                      color: 'var(--text-secondary)',
+                      fontSize: '0.86rem',
+                      lineHeight: '1.55',
+                      margin: 0,
+                    }}
+                  >
+                    {carouselPhotos.length >= 8 ? (
+                      <span>
+                        The carousel is strictly capped at <strong>8 photographs</strong>.
+                        To upload a new photograph, you must <strong>delete one of the existing photos</strong>{' '}
+                        below (which reduces the count to 7/8), or click <strong>Replace / Edit</strong> on any card to swap it in-place.
+                      </span>
+                    ) : (
+                      <span>
+                        You have <strong>{8 - carouselPhotos.length} available photo slot(s)</strong>.
+                        Click <strong>"Upload New Photo"</strong> to add an image.
+                      </span>
+                    )}
+                    <br />
+                    <span style={{ color: '#94A3B8', fontSize: '0.82rem', marginTop: '6px', display: 'inline-block' }}>
+                      🔒 <strong>Permanent Storage Guarantee:</strong> All photos are saved directly as Base64 Data URLs inside the website storage. Even if you subsequently delete the picture from your personal computer or phone, it will remain permanently preserved and visible on the website.
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Photos Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+                gap: '20px',
+              }}
+            >
+              {carouselPhotos.map((photo, index) => (
+                <div
+                  key={photo.id}
+                  className="glass-panel"
+                  style={{
+                    overflow: 'hidden',
+                    borderRadius: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    transition: 'all 0.25s ease',
+                  }}
+                >
+                  {/* Image Thumbnail Container */}
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      aspectRatio: '16 / 9',
+                      background: '#070A10',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <img
+                      src={getAssetUrl(photo.src)}
+                      alt={photo.title}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                      onError={() => {
+                        console.warn('Image thumbnail failed to load:', photo.src);
+                      }}
+                    />
+
+                    {/* Slot Badge */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '10px',
+                        left: '10px',
+                        background: 'rgba(10, 15, 25, 0.85)',
+                        backdropFilter: 'blur(8px)',
+                        border: '1px solid var(--border-gold)',
+                        color: 'var(--accent-gold)',
+                        padding: '3px 10px',
+                        borderRadius: 'var(--radius-pill)',
+                        fontSize: '0.76rem',
+                        fontWeight: '800',
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      Slide #{index + 1}
+                    </div>
+
+                    {photo.isCustom && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '10px',
+                          right: '10px',
+                          background: 'rgba(59, 130, 246, 0.85)',
+                          backdropFilter: 'blur(8px)',
+                          color: '#FFFFFF',
+                          padding: '3px 10px',
+                          borderRadius: 'var(--radius-pill)',
+                          fontSize: '0.72rem',
+                          fontWeight: '700',
+                        }}
+                      >
+                        Custom Upload
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <h4
+                      style={{
+                        color: '#FFFFFF',
+                        fontSize: '1.02rem',
+                        fontWeight: '700',
+                        margin: '0 0 6px 0',
+                        lineHeight: '1.4',
+                      }}
+                    >
+                      {photo.title}
+                    </h4>
+                    <p
+                      style={{
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.84rem',
+                        lineHeight: '1.5',
+                        margin: '0 0 16px 0',
+                        flex: 1,
+                      }}
+                    >
+                      {photo.caption}
+                    </p>
+
+                    {/* Card Actions */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '8px',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                        paddingTop: '12px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        onClick={() => handleOpenReplacePhoto(photo)}
+                        style={{
+                          flex: 1,
+                          fontSize: '0.8rem',
+                          padding: '8px 12px',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Edit2 size={13} /> Replace / Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn-danger"
+                        onClick={() => handleOpenDeletePhoto(photo)}
+                        title="Delete this photo to free up a slot"
+                        style={{
+                          fontSize: '0.8rem',
+                          padding: '8px 12px',
+                          gap: '6px',
+                        }}
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 9: REGISTRATION STATUS & CANCELLATIONS */}
         {activeTab === 'registration' && (
           <div>
             <div className="fee-due-alert" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.3) 100%)' }}>
@@ -3689,6 +4222,249 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 style={{ padding: '8px 20px', fontSize: '0.88rem', fontWeight: '700' }}
               >
                 Close Queue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: UPLOAD NEW CAROUSEL PHOTO (STRICT MAX 8 ENFORCEMENT) */}
+      {showAddPhotoModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '540px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.2)', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Camera size={20} />
+                </div>
+                <h3 style={{ fontSize: '1.3rem', color: '#FFFFFF', margin: 0, fontWeight: '800' }}>
+                  Upload Carousel Photo
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddPhotoModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: '1.3rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', lineHeight: '1.5', marginBottom: '18px' }}>
+              Slot {carouselPhotos.length + 1} of 8. The uploaded photo is permanently saved as a Base64 Data URL, so it remains on the website even if you delete the original file from your computer or phone.
+            </p>
+
+            {photoUploadError && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444', color: '#FCA5A5', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', marginBottom: '16px' }}>
+                {photoUploadError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNewPhoto}>
+              <div className="form-group">
+                <label className="form-label">Select Photo File from Device *</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleUploadPhotoFile(e, false)}
+                  className="form-input"
+                  style={{ padding: '8px' }}
+                  required
+                />
+              </div>
+
+              {newPhotoBase64 && (
+                <div style={{ marginBottom: '16px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-gold)', maxHeight: '200px' }}>
+                  <img src={newPhotoBase64} alt="Preview" style={{ width: '100%', height: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block' }} />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">Photo Title *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={newPhotoTitle}
+                  onChange={(e) => setNewPhotoTitle(e.target.value)}
+                  placeholder="e.g. Modern Silent Study Bay"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Caption / Description *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={newPhotoCaption}
+                  onChange={(e) => setNewPhotoCaption(e.target.value)}
+                  placeholder="e.g. Individual focus cabins with power sockets and reading spotlight"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '22px' }}>
+                <button
+                  type="submit"
+                  className="btn-gold"
+                  disabled={uploadingPhoto || !newPhotoBase64}
+                  style={{ flex: 1, padding: '10px', fontWeight: '700' }}
+                >
+                  {uploadingPhoto ? 'Saving to Website...' : 'Save & Publish to Carousel'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => setShowAddPhotoModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REPLACE / EDIT CAROUSEL PHOTO */}
+      {showReplacePhotoModal && targetPhotoForReplace && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '540px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(59, 130, 246, 0.2)', color: '#60A5FA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Edit2 size={20} />
+                </div>
+                <h3 style={{ fontSize: '1.3rem', color: '#FFFFFF', margin: 0, fontWeight: '800' }}>
+                  Replace / Edit Slide #{targetPhotoForReplace.order}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReplacePhotoModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: '1.3rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {photoUploadError && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444', color: '#FCA5A5', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', marginBottom: '16px' }}>
+                {photoUploadError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveReplacePhoto}>
+              <div style={{ marginBottom: '16px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)', maxHeight: '180px' }}>
+                <img
+                  src={replacePhotoBase64 || getAssetUrl(targetPhotoForReplace.src)}
+                  alt="Preview"
+                  style={{ width: '100%', height: '100%', maxHeight: '180px', objectFit: 'cover', display: 'block' }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Choose New Photo File (Leave blank to keep existing image)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleUploadPhotoFile(e, true)}
+                  className="form-input"
+                  style={{ padding: '8px' }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Photo Title *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={replacePhotoTitle}
+                  onChange={(e) => setReplacePhotoTitle(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Caption / Description *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={replacePhotoCaption}
+                  onChange={(e) => setReplacePhotoCaption(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '22px' }}>
+                <button
+                  type="submit"
+                  className="btn-gold"
+                  disabled={uploadingPhoto}
+                  style={{ flex: 1, padding: '10px', fontWeight: '700' }}
+                >
+                  {uploadingPhoto ? 'Saving Replacement...' : 'Save Updates'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => setShowReplacePhotoModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE CAROUSEL PHOTO CONFIRMATION */}
+      {showDeletePhotoModal && targetPhotoForDelete && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}>
+                <Trash2 size={20} />
+              </div>
+              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', margin: 0, fontWeight: '800' }}>
+                Delete Carousel Photo
+              </h3>
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: '1.5', marginBottom: '16px' }}>
+              Are you sure you want to delete slide #{targetPhotoForDelete.order}?
+            </p>
+
+            <div style={{ padding: '12px 14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', marginBottom: '18px' }}>
+              <div style={{ fontWeight: '700', color: '#FFFFFF', fontSize: '0.92rem' }}>
+                {targetPhotoForDelete.title}
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                {targetPhotoForDelete.caption}
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: '20px', fontSize: '0.82rem', color: '#A7F3D0' }}>
+              ✓ Deleting this photo will free up a slot (count will become {carouselPhotos.length - 1}/8), allowing you to upload a new photo.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setShowDeletePhotoModal(false)}
+                style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={handleConfirmDeletePhoto}
+                style={{ padding: '8px 18px', fontSize: '0.85rem', fontWeight: '700' }}
+              >
+                Yes, Delete Photo
               </button>
             </div>
           </div>

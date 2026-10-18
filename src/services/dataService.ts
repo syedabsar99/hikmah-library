@@ -8,6 +8,7 @@ import type {
   FeeStatus,
   LibraryFacility,
   LibraryRule,
+  CarouselPhoto,
 } from '../types';
 import { db, isFirebaseConfigured } from './firebase';
 import {
@@ -33,6 +34,7 @@ const KEYS = {
   ADMIN_SETTINGS: 'hikmah_admin_settings_v2',
   FACILITIES: 'hikmah_facilities_v2',
   RULES: 'hikmah_rules_v2',
+  CAROUSEL_PHOTOS: 'hikmah_carousel_photos_v2',
 };
 
 // Seed Data
@@ -500,6 +502,65 @@ const INITIAL_AUDIT_LOGS: AuditLog[] = [
     details: 'Registered member Bilal Ahmed (ID: HIK-2025-001) for Morning Shift.',
     timestamp: '2025-01-10T09:00:00.000Z',
     targetId: 'HIK-2025-001',
+  },
+];
+
+export const INITIAL_CAROUSEL_PHOTOS: CarouselPhoto[] = [
+  {
+    id: 'photo-1',
+    src: '/images/gallery/ac_cabins_hall.jpg',
+    caption: 'Dual-season AC & climate control for 24/7 comfort',
+    title: 'Climate-Controlled Study Hall',
+    order: 1,
+  },
+  {
+    id: 'photo-2',
+    src: '/images/gallery/personal_cabin_03.jpg',
+    caption: 'Private study cabin with separate locker, reading spotlight & power sockets',
+    title: 'Individual Study Cabin #03',
+    order: 2,
+  },
+  {
+    id: 'photo-3',
+    src: '/images/gallery/study_hall_focus_1.jpg',
+    caption: 'Silent study bay with distraction-free high partitions',
+    title: 'Silent Study Bay',
+    order: 3,
+  },
+  {
+    id: 'photo-4',
+    src: '/images/gallery/study_hall_wide.jpg',
+    caption: 'Spacious carpeted study lounge for deep focus',
+    title: 'Main Study Lounge',
+    order: 4,
+  },
+  {
+    id: 'photo-5',
+    src: '/images/gallery/study_hall_focus_2.jpg',
+    caption: 'Ergonomic high-back chairs built for long study hours',
+    title: 'Ergonomic Workstations',
+    order: 5,
+  },
+  {
+    id: 'photo-6',
+    src: '/images/gallery/study_hall_perspective.jpg',
+    caption: 'Disciplined silent corridor with seamless access',
+    title: 'Study Hall Corridor',
+    order: 6,
+  },
+  {
+    id: 'photo-7',
+    src: '/images/gallery/founder_entrance.jpg',
+    caption: 'Campus reception at Hib Complex, Opp. Jamia Masjid, Soibugh',
+    title: 'Campus Reception',
+    order: 7,
+  },
+  {
+    id: 'photo-8',
+    src: '/images/gallery/founder_banner.jpg',
+    caption: 'Hikmah Library • Where wisdom meets focus',
+    title: 'Official Campus Signboard',
+    order: 8,
   },
 ];
 
@@ -1547,5 +1608,97 @@ export const DataService = {
     const filtered = list.filter((r) => r.id !== id);
     saveLocal(KEYS.RULES, filtered);
     return true;
+  },
+
+  // ---------------- DYNAMIC PHOTO CAROUSEL & CAMPUS GALLERY (MAX 8 PHOTOS) ----------------
+  async getCarouselPhotos(): Promise<CarouselPhoto[]> {
+    return loadLocal<CarouselPhoto[]>(KEYS.CAROUSEL_PHOTOS, INITIAL_CAROUSEL_PHOTOS);
+  },
+
+  async addCarouselPhoto(
+    photo: Omit<CarouselPhoto, 'id' | 'order'>,
+    adminName: string
+  ): Promise<{ success: boolean; photo?: CarouselPhoto; error?: string }> {
+    const list = await this.getCarouselPhotos();
+    if (list.length >= 8) {
+      return {
+        success: false,
+        error: 'Maximum limit of 8 carousel photos reached. You must delete an existing photo first to upload a new one.',
+      };
+    }
+    const newPhoto: CarouselPhoto = {
+      ...photo,
+      id: `photo-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      order: list.length + 1,
+      uploadedAt: new Date().toISOString(),
+      isCustom: true,
+    };
+    const updated = [...list, newPhoto];
+    saveLocal(KEYS.CAROUSEL_PHOTOS, updated);
+    await this.addAuditLog(
+      'CAROUSEL_PHOTO_ADDED',
+      'SYSTEM',
+      `Admin added new carousel photo: "${newPhoto.title}" (Total: ${updated.length}/8).`,
+      adminName
+    );
+    return { success: true, photo: newPhoto };
+  },
+
+  async replaceCarouselPhoto(
+    id: string,
+    updates: Partial<CarouselPhoto>,
+    adminName: string
+  ): Promise<{ success: boolean; photo?: CarouselPhoto; error?: string }> {
+    const list = await this.getCarouselPhotos();
+    const idx = list.findIndex((p) => p.id === id);
+    if (idx === -1) {
+      return { success: false, error: 'Photo not found in carousel.' };
+    }
+    list[idx] = {
+      ...list[idx],
+      ...updates,
+      uploadedAt: new Date().toISOString(),
+      isCustom: true,
+    };
+    saveLocal(KEYS.CAROUSEL_PHOTOS, list);
+    await this.addAuditLog(
+      'CAROUSEL_PHOTO_REPLACED',
+      'SYSTEM',
+      `Admin replaced carousel photo slot #${list[idx].order}: "${list[idx].title}".`,
+      adminName
+    );
+    return { success: true, photo: list[idx] };
+  },
+
+  async deleteCarouselPhoto(id: string, adminName: string): Promise<{ success: boolean; error?: string }> {
+    const list = await this.getCarouselPhotos();
+    const target = list.find((p) => p.id === id);
+    if (!target) {
+      return { success: false, error: 'Photo not found.' };
+    }
+    if (list.length <= 1) {
+      return { success: false, error: 'The carousel must retain at least 1 photo.' };
+    }
+    const filtered = list.filter((p) => p.id !== id);
+    const reordered = filtered.map((p, idx) => ({ ...p, order: idx + 1 }));
+    saveLocal(KEYS.CAROUSEL_PHOTOS, reordered);
+    await this.addAuditLog(
+      'CAROUSEL_PHOTO_DELETED',
+      'SYSTEM',
+      `Admin deleted carousel photo: "${target.title}" (Remaining: ${reordered.length}/8).`,
+      adminName
+    );
+    return { success: true };
+  },
+
+  async resetToDefaultCarouselPhotos(adminName: string): Promise<CarouselPhoto[]> {
+    saveLocal(KEYS.CAROUSEL_PHOTOS, INITIAL_CAROUSEL_PHOTOS);
+    await this.addAuditLog(
+      'CAROUSEL_PHOTOS_RESET',
+      'SYSTEM',
+      'Admin restored original 8 campus gallery photos.',
+      adminName
+    );
+    return INITIAL_CAROUSEL_PHOTOS;
   },
 };

@@ -158,3 +158,14 @@ export interface CurrentUser {
   isSuspended?: boolean;
   isCancelled?: boolean;
 }
+
+export interface CarouselPhoto {
+  id: string;
+  src: string; // File path, base64 Data URL, or web link
+  caption: string;
+  title: string;
+  order: number;
+  uploadedAt?: string;
+  isCustom?: boolean;
+}
+

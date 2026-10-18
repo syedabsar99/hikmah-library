@@ -1,12 +1,15 @@
+import React, { useState } from 'react';
 import { BookOpen, MapPin, Phone, Mail, Clock, ShieldCheck, MessageCircle } from 'lucide-react';
 import { InstagramIcon } from './InstagramIcon';
 import { useAuth } from '../context/AuthContext';
+import { getAssetUrl } from '../utils/assets';
 
 interface FooterProps {
   onNavigate: (view: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+  const [imgError, setImgError] = useState(false);
   const { adminPhone, adminEmail } = useAuth();
   const cleanPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
   const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
@@ -143,17 +146,36 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', width: '100%' }}>
             {/* Developer Avatar */}
             <div className="footer-dev-avatar">
-              <img
-                src="/images/syed_absar.jpg"
-                alt="Syed Absar"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  objectPosition: 'center 15%',
-                  display: 'block',
-                }}
-              />
+              {!imgError ? (
+                <img
+                  src={getAssetUrl('/images/syed_absar.jpg')}
+                  alt="Syed Absar"
+                  onError={() => setImgError(true)}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: 'center 15%',
+                    display: 'block',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'linear-gradient(135deg, var(--accent-gold) 0%, #997312 100%)',
+                    color: 'var(--primary-navy)',
+                    fontWeight: '800',
+                    fontSize: '1rem',
+                  }}
+                >
+                  SA
+                </div>
+              )}
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>

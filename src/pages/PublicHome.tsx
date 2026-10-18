@@ -28,60 +28,9 @@ import {
 } from 'lucide-react';
 import { InstagramIcon } from '../components/InstagramIcon';
 import { useAuth } from '../context/AuthContext';
-import { DataService } from '../services/dataService';
-import type { Announcement, LibraryFacility, LibraryRule } from '../types';
-
-// Real Authentic Photos of Hikmah Library with concise on-image captions
-const REAL_PHOTOS = [
-  {
-    id: 'photo-1',
-    src: '/images/gallery/ac_cabins_hall.jpg',
-    caption: 'Dual-season AC & climate control for 24/7 comfort',
-    title: 'Climate-Controlled Study Hall',
-  },
-  {
-    id: 'photo-2',
-    src: '/images/gallery/personal_cabin_03.jpg',
-    caption: 'Private study cabin with separate locker, reading spotlight & power sockets',
-    title: 'Individual Study Cabin #03',
-  },
-  {
-    id: 'photo-3',
-    src: '/images/gallery/study_hall_focus_1.jpg',
-    caption: 'Silent study bay with distraction-free high partitions',
-    title: 'Silent Study Bay',
-  },
-  {
-    id: 'photo-4',
-    src: '/images/gallery/study_hall_wide.jpg',
-    caption: 'Spacious carpeted study lounge for deep focus',
-    title: 'Main Study Lounge',
-  },
-  {
-    id: 'photo-5',
-    src: '/images/gallery/study_hall_focus_2.jpg',
-    caption: 'Ergonomic high-back chairs built for long study hours',
-    title: 'Ergonomic Workstations',
-  },
-  {
-    id: 'photo-6',
-    src: '/images/gallery/study_hall_perspective.jpg',
-    caption: 'Disciplined silent corridor with seamless access',
-    title: 'Study Hall Corridor',
-  },
-  {
-    id: 'photo-7',
-    src: '/images/gallery/founder_entrance.jpg',
-    caption: 'Campus reception at Hib Complex, Opp. Jamia Masjid, Soibugh',
-    title: 'Campus Reception',
-  },
-  {
-    id: 'photo-8',
-    src: '/images/gallery/founder_banner.jpg',
-    caption: 'Hikmah Library • Where wisdom meets focus',
-    title: 'Official Campus Signboard',
-  },
-];
+import { DataService, INITIAL_CAROUSEL_PHOTOS } from '../services/dataService';
+import { getAssetUrl } from '../utils/assets';
+import type { Announcement, LibraryFacility, LibraryRule, CarouselPhoto } from '../types';
 
 interface PublicHomeProps {
   onNavigate: (view: string) => void;
@@ -95,12 +44,19 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [facilities, setFacilities] = useState<LibraryFacility[]>([]);
   const [rules, setRules] = useState<LibraryRule[]>([]);
+  const [carouselPhotos, setCarouselPhotos] = useState<CarouselPhoto[]>(INITIAL_CAROUSEL_PHOTOS);
+  const [isCarouselHovered, setIsCarouselHovered] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<{ src: string; title: string; desc: string } | null>(null);
 
   useEffect(() => {
     DataService.getAnnouncements().then(setAnnouncements);
     DataService.getFacilities().then(setFacilities);
     DataService.getRules().then(setRules);
+    DataService.getCarouselPhotos().then((photos) => {
+      if (photos && photos.length > 0) {
+        setCarouselPhotos(photos);
+      }
+    });
   }, []);
 
   const [showQuickPostModal, setShowQuickPostModal] = useState(false);
@@ -250,23 +206,27 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
     return () => clearTimeout(timeout);
   }, [typedTitleCount, isDeletingTitle, fullHeroTitle.length]);
 
-  // Auto-moving picture carousel (runs continuously every 3 seconds)
+  // Auto-moving picture carousel (runs continuously every 4 seconds, pauses on hover)
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
+  const photoCount = carouselPhotos.length || 1;
+  const safeCarouselIndex = carouselIndex % photoCount;
+
   useEffect(() => {
+    if (carouselPhotos.length <= 1 || isCarouselHovered) return;
     const timer = setInterval(() => {
-      setCarouselIndex((prev) => (prev + 1) % REAL_PHOTOS.length);
-    }, 3000);
+      setCarouselIndex((prev) => (prev + 1) % carouselPhotos.length);
+    }, 4000);
     return () => clearInterval(timer);
-  }, []);
+  }, [carouselPhotos.length, isCarouselHovered]);
 
   const prevSlide = () => {
-    setCarouselIndex((prev) => (prev - 1 + REAL_PHOTOS.length) % REAL_PHOTOS.length);
+    setCarouselIndex((prev) => (prev - 1 + carouselPhotos.length) % carouselPhotos.length);
   };
 
   const nextSlide = () => {
-    setCarouselIndex((prev) => (prev + 1) % REAL_PHOTOS.length);
+    setCarouselIndex((prev) => (prev + 1) % carouselPhotos.length);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -773,6 +733,8 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
             }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
+            onMouseEnter={() => setIsCarouselHovered(true)}
+            onMouseLeave={() => setIsCarouselHovered(false)}
           >
             {/* Viewport with rounded corners & gold glow */}
             <div
@@ -792,26 +754,26 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
               <div
                 style={{
                   display: 'flex',
-                  width: `${REAL_PHOTOS.length * 100}%`,
+                  width: `${photoCount * 100}%`,
                   height: '100%',
-                  transform: `translateX(-${(carouselIndex * 100) / REAL_PHOTOS.length}%)`,
+                  transform: `translateX(-${(safeCarouselIndex * 100) / photoCount}%)`,
                   transition: 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1)',
                 }}
               >
-                {REAL_PHOTOS.map((photo, index) => (
+                {carouselPhotos.map((photo, index) => (
                   <div
                     key={photo.id}
                     style={{
-                      width: `${100 / REAL_PHOTOS.length}%`,
+                      width: `${100 / photoCount}%`,
                       height: '100%',
                       position: 'relative',
                       flexShrink: 0,
                       cursor: 'pointer',
                     }}
-                    onClick={() => setLightboxPhoto({ src: photo.src, title: photo.title, desc: photo.caption })}
+                    onClick={() => setLightboxPhoto({ src: getAssetUrl(photo.src), title: photo.title, desc: photo.caption })}
                   >
                     <img
-                      src={photo.src}
+                      src={getAssetUrl(photo.src)}
                       alt={photo.caption}
                       loading={index === 0 ? 'eager' : 'lazy'}
                       style={{
@@ -819,6 +781,9 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                         height: '100%',
                         objectFit: 'cover',
                         display: 'block',
+                      }}
+                      onError={() => {
+                        console.warn(`Carousel photo failed to load: ${photo.src}`);
                       }}
                     />
 
@@ -887,7 +852,7 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {index + 1} / {REAL_PHOTOS.length}
+                          {index + 1} / {carouselPhotos.length}
                         </div>
                       </div>
                     </div>
@@ -990,7 +955,7 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                 marginTop: '18px',
               }}
             >
-              {REAL_PHOTOS.map((_, dotIdx) => (
+              {carouselPhotos.map((_, dotIdx) => (
                 <button
                   key={dotIdx}
                   type="button"
@@ -998,9 +963,9 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                   aria-label={`Go to slide ${dotIdx + 1}`}
                   style={{
                     height: '8px',
-                    width: carouselIndex === dotIdx ? '28px' : '8px',
+                    width: safeCarouselIndex === dotIdx ? '28px' : '8px',
                     borderRadius: 'var(--radius-pill)',
-                    background: carouselIndex === dotIdx ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.25)',
+                    background: safeCarouselIndex === dotIdx ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.25)',
                     border: 'none',
                     padding: 0,
                     cursor: 'pointer',

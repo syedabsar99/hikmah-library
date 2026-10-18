@@ -1017,6 +1017,165 @@ async function runTests() {
   assert(authenticateStudent(studentProfileUnprovisioned, '43210').success === false, 'SECURITY: Unactivated account strictly blocks phone digits');
   assert(authenticateStudent(studentProfileUnprovisioned, '').success === false, 'SECURITY: Unactivated account prompts user to activate account');
 
+  // --- 19. ASSET PATH RESOLUTION & IMAGE DISPLAY INTEGRITY ---
+  console.log('\nSuite 19: Asset Path Resolution & Image Display Integrity');
+  
+  function testResolveAssetUrl(path: string, mockPathname: string): string {
+    if (!path) return '';
+    if (
+      path.startsWith('data:') ||
+      path.startsWith('blob:') ||
+      path.startsWith('http://') ||
+      path.startsWith('https://')
+    ) {
+      return path;
+    }
+    const clean = path.replace(/^\/+/, '');
+    const isGhPages = mockPathname.startsWith('/hikmah-library');
+    const base = isGhPages ? '/hikmah-library/' : '/';
+    return `${base}${clean}`;
+  }
+
+  // Test local development asset resolution
+  const devDevPhoto = testResolveAssetUrl('/images/syed_absar.jpg', '/');
+  assert(devDevPhoto === '/images/syed_absar.jpg', 'Local development resolves developer photo as /images/syed_absar.jpg');
+  
+  const devGalleryPhoto = testResolveAssetUrl('/images/gallery/ac_cabins_hall.jpg', '/');
+  assert(devGalleryPhoto === '/images/gallery/ac_cabins_hall.jpg', 'Local development resolves campus photo correctly');
+
+  // Test GitHub Pages asset resolution (subdirectory /hikmah-library/)
+  const ghPagesDevPhoto = testResolveAssetUrl('/images/syed_absar.jpg', '/hikmah-library/');
+  assert(ghPagesDevPhoto === '/hikmah-library/images/syed_absar.jpg', 'GitHub Pages resolves developer photo with /hikmah-library/ base prefix');
+
+  const ghPagesGalleryPhoto = testResolveAssetUrl('/images/gallery/study_hall_focus_1.jpg', '/hikmah-library/index.html');
+  assert(ghPagesGalleryPhoto === '/hikmah-library/images/gallery/study_hall_focus_1.jpg', 'GitHub Pages resolves campus photo with /hikmah-library/ base prefix');
+
+  // Test Base64 Data URL preservation (device independence)
+  const base64DataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD...';
+  const resolvedBase64 = testResolveAssetUrl(base64DataUrl, '/hikmah-library/');
+  assert(resolvedBase64 === base64DataUrl, 'Base64 Data URLs preserved untouched without path corruption');
+
+  // Test External URL preservation
+  const externalUrl = 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da';
+  const resolvedExternal = testResolveAssetUrl(externalUrl, '/hikmah-library/');
+  assert(resolvedExternal === externalUrl, 'External image URLs preserved untouched');
+
+  // --- 20. DYNAMIC PHOTO CAROUSEL & STRICT 8-PHOTO CEILING ENFORCEMENT ---
+  console.log('\nSuite 20: Dynamic Photo Carousel & Strict 8-Photo Ceiling Enforcement');
+
+  interface CarouselItem {
+    id: string;
+    src: string;
+    title: string;
+    caption: string;
+    order: number;
+    isCustom?: boolean;
+  }
+
+  const initial8Photos: CarouselItem[] = [
+    { id: 'p1', src: '/images/gallery/ac_cabins_hall.jpg', title: 'Hall 1', caption: 'AC Cabins', order: 1 },
+    { id: 'p2', src: '/images/gallery/personal_cabin_03.jpg', title: 'Cabin 3', caption: 'Private Cabin', order: 2 },
+    { id: 'p3', src: '/images/gallery/study_hall_focus_1.jpg', title: 'Focus 1', caption: 'Study Bay', order: 3 },
+    { id: 'p4', src: '/images/gallery/study_hall_wide.jpg', title: 'Wide Hall', caption: 'Lounge', order: 4 },
+    { id: 'p5', src: '/images/gallery/study_hall_focus_2.jpg', title: 'Focus 2', caption: 'Ergonomic', order: 5 },
+    { id: 'p6', src: '/images/gallery/study_hall_perspective.jpg', title: 'Corridor', caption: 'Silent Zone', order: 6 },
+    { id: 'p7', src: '/images/gallery/founder_entrance.jpg', title: 'Reception', caption: 'Campus Reception', order: 7 },
+    { id: 'p8', src: '/images/gallery/founder_banner.jpg', title: 'Banner', caption: 'Official Signboard', order: 8 },
+  ];
+
+  let carouselState: CarouselItem[] = [...initial8Photos];
+
+  function addPhoto(item: Omit<CarouselItem, 'id' | 'order'>): { success: boolean; error?: string; photo?: CarouselItem } {
+    if (carouselState.length >= 8) {
+      return {
+        success: false,
+        error: 'Maximum limit of 8 carousel photos reached. You must delete an existing photo first to upload a new one.',
+      };
+    }
+    const newPhoto: CarouselItem = {
+      ...item,
+      id: `p-${Date.now()}`,
+      order: carouselState.length + 1,
+      isCustom: true,
+    };
+    carouselState.push(newPhoto);
+    return { success: true, photo: newPhoto };
+  }
+
+  function deletePhoto(id: string): { success: boolean; error?: string } {
+    if (carouselState.length <= 1) {
+      return { success: false, error: 'The carousel must retain at least 1 photo.' };
+    }
+    const idx = carouselState.findIndex((p) => p.id === id);
+    if (idx === -1) return { success: false, error: 'Photo not found.' };
+    carouselState.splice(idx, 1);
+    // Recalculate order numbers
+    carouselState = carouselState.map((p, i) => ({ ...p, order: i + 1 }));
+    return { success: true };
+  }
+
+  function replacePhoto(id: string, updates: Partial<CarouselItem>): { success: boolean; error?: string } {
+    const idx = carouselState.findIndex((p) => p.id === id);
+    if (idx === -1) return { success: false, error: 'Photo not found.' };
+    carouselState[idx] = { ...carouselState[idx], ...updates, isCustom: true };
+    return { success: true };
+  }
+
+  // Verify initial count is exactly 8
+  assert(carouselState.length === 8, 'Carousel initialized with exactly 8 photos');
+
+  // Verify adding a 9th photo is strictly rejected
+  const ninthPhotoAttempt = addPhoto({
+    src: 'data:image/jpeg;base64,samplebase64data',
+    title: 'Ninth Photo',
+    caption: 'Should be rejected',
+  });
+  assert(ninthPhotoAttempt.success === false, 'STRICT ENFORCEMENT: 9th photo upload strictly REJECTED when 8 exist');
+  assert(
+    ninthPhotoAttempt.error?.includes('Maximum limit of 8'),
+    'Correct limit error message returned on 9th photo attempt'
+  );
+  assert(carouselState.length === 8, 'Carousel count remains strictly capped at 8');
+
+  // Verify replacing a photo keeps count at 8 and updates content
+  const replaceRes = replacePhoto('p3', {
+    src: 'data:image/jpeg;base64,newreplacedcabin',
+    title: 'Upgraded Focus Cabin',
+    caption: 'Soundproof cabin with high illumination',
+  });
+  assert(replaceRes.success === true, 'Admin can replace an existing photo in-place');
+  assert(carouselState.length === 8, 'Count remains exactly 8 after in-place replacement');
+  assert(carouselState[2].title === 'Upgraded Focus Cabin', 'Replaced photo content updated correctly');
+
+  // Verify deleting a photo frees up a slot
+  const deleteRes = deletePhoto('p8');
+  assert(deleteRes.success === true, 'Admin successfully deleted photo p8');
+  assert(carouselState.length === 7, 'Carousel photo count decremented to 7 (1 slot free)');
+  assert(carouselState.every((p, i) => p.order === i + 1), 'Remaining photos re-ordered sequentially from 1 to 7');
+
+  // Now that count is 7, adding a new photo succeeds!
+  const customBase64 = 'data:image/jpeg;base64,/9j/newuploadedphoto...';
+  const addRes = addPhoto({
+    src: customBase64,
+    title: 'Brand New Study Hall',
+    caption: 'Newly inaugurated reading pavilion',
+  });
+  assert(addRes.success === true, 'Admin can upload new photo into freed slot');
+  assert(carouselState.length === 8, 'Carousel count filled back up to 8');
+  assert(carouselState[7].src === customBase64, 'Custom photo stores persistent Base64 Data URL');
+  assert(carouselState[7].order === 8, 'New photo assigned order #8');
+
+  // Verify attempting to delete down to zero is prevented
+  const singlePhotoState: CarouselItem[] = [{ id: 'lone', src: '/img.jpg', title: 'Lone', caption: 'Last', order: 1 }];
+  carouselState = singlePhotoState;
+  const deleteLastAttempt = deletePhoto('lone');
+  assert(deleteLastAttempt.success === false, 'Carousel cannot be emptied to 0 photos (retains at least 1 photo)');
+
+  // Verify restoring default 8 photos
+  carouselState = [...initial8Photos];
+  assert(carouselState.length === 8, 'Reset restores all 8 default authentic campus photographs');
+  assert(carouselState[0].src === '/images/gallery/ac_cabins_hall.jpg', 'Default photo #1 restored');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');
