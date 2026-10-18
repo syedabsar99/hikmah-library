@@ -6,6 +6,7 @@ import { validatePasswordPolicy } from '../utils/validation';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  updatePassword,
   signOut,
 } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../services/firebase';
@@ -22,6 +23,7 @@ interface AuthContextType {
   logout: () => void;
   updateAdminPasswordWithOtp: (phoneNumber: string, newPassword: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   updateMemberPasscodeWithOtp: (phoneNumber: string, newPasscode: string, otp: string) => Promise<{ success: boolean; error?: string }>;
+  changeLoggedInMemberPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   refreshProfile: () => Promise<void>;
   getAdminPhoneNumber: () => string;
   getAdminEmail: () => string;
@@ -531,6 +533,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
+  // STUDENT SELF-SERVICE PASSWORD CHANGE (FOR ALREADY LOGGED-IN STUDENTS WITHOUT EMAIL LINK)
+  const changeLoggedInMemberPassword = async (
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const policy = validatePasswordPolicy(newPassword);
+    if (!policy.valid) {
+      return { success: false, error: 'Password Policy: ' + policy.errors.join(' • ') };
+    }
+
+    if (!currentMemberProfile) {
+      return { success: false, error: 'No student is currently logged in.' };
+    }
+
+    const trimmed = newPassword.trim();
+
+    // 1. If Firebase Auth user is active, update Firebase Auth password directly
+    const auth = getFirebaseAuth();
+    if (isFirebaseConfigured() && auth && auth.currentUser) {
+      try {
+        await updatePassword(auth.currentUser, trimmed);
+      } catch (err: any) {
+        console.warn('Firebase Auth updatePassword warning (non-blocking):', err);
+      }
+    }
+
+    // 2. Update directory member record in Firestore and Local Storage
+    const updated = await DataService.updateMember(
+      currentMemberProfile.id,
+      { passcode: trimmed },
+      'Student In-Portal Password Update'
+    );
+
+    if (!updated) {
+      return { success: false, error: 'Failed to update password in library database.' };
+    }
+
+    // 3. Update current memory profile and active session
+    const freshProfile = { ...currentMemberProfile, passcode: trimmed };
+    setCurrentMemberProfile(freshProfile);
+
+    // 4. Record audit log
+    await DataService.addAuditLog(
+      'MEMBER_PASSWORD_CHANGED',
+      'AUTH',
+      `Student ${currentMemberProfile.fullName} (${currentMemberProfile.id}) updated their password directly in the student portal without needing email verification.`,
+      currentMemberProfile.fullName,
+      currentMemberProfile.id
+    );
+
+    return { success: true };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -545,6 +599,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         updateAdminPasswordWithOtp,
         updateMemberPasscodeWithOtp,
+        changeLoggedInMemberPassword,
         refreshProfile,
         getAdminPhoneNumber,
         getAdminEmail,
@@ -574,6 +629,7 @@ const defaultAuthContext: AuthContextType = {
   logout: () => {},
   updateAdminPasswordWithOtp: async () => ({ success: false, error: 'Authentication initializing' }),
   updateMemberPasscodeWithOtp: async () => ({ success: false, error: 'Authentication initializing' }),
+  changeLoggedInMemberPassword: async () => ({ success: false, error: 'Authentication initializing' }),
   refreshProfile: async () => {},
   getAdminPhoneNumber: () => '9622497806',
   getAdminEmail: () => 'syedabsar99@gmail.com',

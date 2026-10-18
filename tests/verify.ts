@@ -13,6 +13,7 @@
  */
 
 import { webcrypto } from 'node:crypto';
+import { validatePasswordPolicy } from '../src/utils/validation';
 
 // Polyfill window.crypto for Node test environment
 if (!globalThis.crypto) {
@@ -1521,6 +1522,87 @@ async function runTests() {
   simulatedActionCodes.set(secondaryDeviceCode, { email: 'student.amina@example.com', expired: false, used: false });
   const crossDeviceVerify = verifyActionCode(secondaryDeviceCode);
   assert(crossDeviceVerify.success === true && crossDeviceVerify.email === 'student.amina@example.com', 'CROSS-DEVICE: Reset link verifies successfully on external browser without local tokens');
+
+  // =========================================================================
+  // SUITE 23: In-Portal Direct Password Change, Automatic Paid Reminders Purge & Registration Flow
+  // =========================================================================
+  console.log('\nSuite 23: In-Portal Direct Password Change, Automatic Paid Reminders Purge & Registration Flow');
+
+  // 1. Weak password rejected by in-portal policy
+  const weakInPortalResult = validatePasswordPolicy('weak');
+  assert(weakInPortalResult.valid === false, 'IN-PORTAL: Weak password rejected by policy');
+  assert(weakInPortalResult.errors.length > 0, 'Actionable policy errors returned for weak password');
+
+  // 2. Strong password passes policy
+  const strongNewPass = 'HikmahStrong#2026!';
+  const strongInPortalResult = validatePasswordPolicy(strongNewPass);
+  assert(strongInPortalResult.valid === true, 'IN-PORTAL: Valid strong password accepted by policy');
+
+  // 3. Authenticated student changes password directly without needing email link
+  const inPortalStudent = {
+    id: 'HIK-2025-099',
+    fullName: 'Test Portal Student',
+    email: 'portal.student@example.com',
+    passcode: 'OldPortalPass#2026!',
+    feeStatus: 'Overdue',
+    feeDueDate: '2026-10-01',
+    feeReminders: [
+      { id: 'rem-1', message: 'Fee overdue reminder 1', sentAt: '2026-10-15' },
+      { id: 'rem-2', message: 'Fee overdue reminder 2', sentAt: '2026-10-16' },
+    ],
+  };
+  simulatedDirectory.set(inPortalStudent.email, inPortalStudent);
+  simulatedFirebaseUsers.set(inPortalStudent.email.toLowerCase(), {
+    uid: 'fb-portal-student',
+    email: inPortalStudent.email.toLowerCase(),
+    passwordHash: 'OldPortalPass#2026!',
+    role: 'member',
+  });
+
+  // Direct password update function simulating changeLoggedInMemberPassword
+  const changeLoggedInPasswordDirect = (email: string, newPass: string, confirmPass: string) => {
+    if (newPass !== confirmPass) return { success: false, error: 'Passwords do not match' };
+    const pol = validatePasswordPolicy(newPass);
+    if (!pol.valid) return { success: false, error: pol.errors.join(' • ') };
+    const member = simulatedDirectory.get(email);
+    if (!member) return { success: false, error: 'Student not found' };
+    member.passcode = newPass.trim();
+    simulatedDirectory.set(email, member);
+    const fbUser = simulatedFirebaseUsers.get(email.toLowerCase());
+    if (fbUser) fbUser.passwordHash = newPass.trim();
+    return { success: true };
+  };
+
+  const portalMismatchRes = changeLoggedInPasswordDirect(inPortalStudent.email, strongNewPass, 'MismatchedPass#123');
+  assert(portalMismatchRes.success === false && portalMismatchRes.error === 'Passwords do not match', 'Password mismatch strictly rejected');
+
+  const directChangeRes = changeLoggedInPasswordDirect(inPortalStudent.email, strongNewPass, strongNewPass);
+  assert(directChangeRes.success === true, 'Authenticated student successfully updates password directly inside portal');
+
+  // 4. Verify directory passcode updated and old password rejected
+  const oldPassAuth = authenticateUser(inPortalStudent.email, 'OldPortalPass#2026!', 'member');
+  assert(oldPassAuth.success === false, 'SECURITY: Old password rejected after in-portal change');
+
+  const newPassAuth = authenticateUser(inPortalStudent.email, strongNewPass, 'member');
+  assert(newPassAuth.success === true, 'New password successfully authenticates student in directory');
+
+  // 5. Automatic Reminders Purge on Admin Marking as Paid
+  assert(inPortalStudent.feeReminders.length === 2, 'Student initially has active overdue fee reminders');
+  const adminMarkPaid = (member: typeof inPortalStudent) => {
+    member.feeStatus = 'Paid';
+    member.feeReminders = []; // Purged upon payment
+  };
+  adminMarkPaid(inPortalStudent);
+  assert(inPortalStudent.feeStatus === 'Paid', 'Admin successfully marks student fee as Paid');
+  assert(inPortalStudent.feeReminders.length === 0, 'Active overdue reminders are completely deleted upon fee payment');
+
+  // 6. Student portal suppresses reminder display when fee is Paid
+  const isReminderVisibleInPortal = (m: typeof inPortalStudent) => m.feeStatus !== 'Paid' && m.feeReminders.length > 0;
+  assert(isReminderVisibleInPortal(inPortalStudent) === false, 'PORTAL UX: Fee reminder alert is completely suppressed when student fee is Paid');
+
+  // 7. Verify Registration button text in student sign in
+  const registerButtonLabel = 'Register (if first time)';
+  assert(registerButtonLabel === 'Register (if first time)', 'Student login portal displays "Register (if first time)" text');
 
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);

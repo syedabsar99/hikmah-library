@@ -982,7 +982,7 @@ export const DataService = {
     const { status, daysDiff } = calculateFeeStatus(member.feeDueDate);
 
     const defaultMsg = status === 'Overdue'
-      ? `Important Reminder: Your monthly study lounge membership fee of ₹${member.monthlyFee || 1200} was due on ${member.feeDueDate} (expired by ${daysDiff} day(s)). Please clear your dues at the reception or via UPI to retain your assigned seat.`
+      ? `Important Reminder: Your monthly study lounge membership fee of ₹${member.monthlyFee || 1200} was due on ${member.feeDueDate} (expired by ${daysDiff} day(s)). Please clear your dues at the library desk to retain your assigned seat.`
       : `Upcoming Renewal Notice: Your monthly library membership fee of ₹${member.monthlyFee || 1200} is due on ${member.feeDueDate}.`;
 
     const reminder = {
@@ -994,7 +994,11 @@ export const DataService = {
     };
 
     const existingReminders = member.feeReminders || [];
-    member.feeReminders = [reminder, ...existingReminders];
+    // Deduplicate: filter out identical reminders for the same day and threshold, and cap at 3
+    const filtered = existingReminders.filter(
+      (r) => r.date !== reminder.date || r.daysOverdue !== reminder.daysOverdue
+    );
+    member.feeReminders = [reminder, ...filtered].slice(0, 3);
     members[index] = member;
     saveLocal(KEYS.MEMBERS, members);
 

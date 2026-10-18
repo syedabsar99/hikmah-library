@@ -422,7 +422,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                   gap: '6px',
                 }}
               >
-                <UserPlus size={16} /> Activate Account / Set Password
+                <UserPlus size={16} /> Register (if first time)
               </button>
             </div>
           </div>

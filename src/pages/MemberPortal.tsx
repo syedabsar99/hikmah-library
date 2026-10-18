@@ -8,6 +8,7 @@ import type {
   ChatMessage,
   MemberProfile,
 } from '../types';
+import { validatePasswordPolicy } from '../utils/validation';
 import {
   AlertTriangle,
   ShieldCheck,
@@ -27,6 +28,9 @@ import {
   MessageSquare,
   ArrowLeft,
   X,
+  Key,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface MemberPortalProps {
@@ -34,7 +38,7 @@ interface MemberPortalProps {
 }
 
 export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavigate }) => {
-  const { currentUser, currentMemberProfile: authMemberProfile, logout, refreshProfile, adminPhone, adminEmail } = useAuth();
+  const { currentUser, currentMemberProfile: authMemberProfile, logout, refreshProfile, adminPhone, adminEmail, changeLoggedInMemberPassword } = useAuth();
   const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
 
   // Member live profile state (synced with DataService)
@@ -42,6 +46,16 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // In-Portal Password Change State (Direct authenticated password update without email link)
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [changePassLoading, setChangePassLoading] = useState(false);
+  const [changePassError, setChangePassError] = useState<string | null>(null);
+  const [changePassSuccess, setChangePassSuccess] = useState(false);
 
   // Member Datasets
   const [myWarnings, setMyWarnings] = useState<WarningRecord[]>([]);
@@ -85,6 +99,11 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
         logout();
         _onNavigate?.('home');
         return;
+      }
+      // If student is marked Paid by administration, automatically clear any stale overdue reminders
+      if (fresh.feeStatus === 'Paid' && fresh.feeReminders && fresh.feeReminders.length > 0) {
+        fresh.feeReminders = [];
+        DataService.updateMember(fresh.id, { feeReminders: [] }, 'Auto-clear Paid Fee Reminders');
       }
       setMemberProfile(fresh);
       const warns = await DataService.getWarnings(currentUser.memberId);
@@ -497,6 +516,32 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                 <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} /> Refresh
               </button>
               <button
+                id="member-change-password-btn"
+                className="btn-outline"
+                onClick={() => {
+                  setShowChangePasswordModal(true);
+                  setChangePassError(null);
+                  setChangePassSuccess(false);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                }}
+                style={{
+                  padding: '9px 16px',
+                  fontSize: '0.88rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  borderColor: 'rgba(234, 179, 8, 0.4)',
+                  color: 'var(--accent-gold)',
+                  fontWeight: '700',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                }}
+                title="Change your account password directly"
+              >
+                <Key size={15} /> Change Password
+              </button>
+              <button
                 id="member-logout-btn"
                 className="btn-danger"
                 onClick={logout}
@@ -826,28 +871,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                 Last Paid: {profile?.lastPaidDate || 'On file'}
               </div>
             </div>
-
-            {/* Payment Modes */}
-            <div className="glass-panel" style={{ padding: '24px', borderRadius: 'var(--radius-lg)' }}>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                PAYMENT METHODS
-              </div>
-              <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#F8FAFC', marginTop: '8px' }}>
-                Front Reception / UPI Transfer
-              </div>
-              <div style={{ fontSize: '0.82rem', color: '#94A3B8', marginTop: '6px', lineHeight: '1.5' }}>
-                UPI ID: <strong style={{ color: 'var(--accent-gold)' }}>hikmah.study@upi</strong>
-                <br />
-                Helpline: <strong>{displayPhone}</strong>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '8px' }}>
-                Once paid, administrator marks account cleared in real time.
-              </div>
-            </div>
           </div>
 
-          {/* Overdue Reminder Messages Dispatch Log */}
-          {profile?.feeReminders && profile.feeReminders.length > 0 && (
+          {/* Overdue Reminder Messages Dispatch Log - Automatically deleted once marked Paid by administration */}
+          {!isFeePaid && profile?.feeReminders && profile.feeReminders.length > 0 && (
             <div className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ fontSize: '0.92rem', fontWeight: '700', color: '#FFFFFF', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <AlertTriangle size={16} color="#F59E0B" /> Official Fee Reminder Messages Dispatched to Your Account:
@@ -1336,6 +1363,295 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
             </div>
           )}
         </div>
+
+        {/* =========================================================================
+            MODAL: IN-PORTAL CHANGE PASSWORD (AUTHENTICATED SESSION - NO EMAIL LINK)
+            ========================================================================= */}
+        {showChangePasswordModal && (
+          <div className="modal-overlay" style={{ zIndex: 1100 }}>
+            <div className="modal-content" style={{ maxWidth: '460px', padding: '28px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: 'rgba(234, 179, 8, 0.15)',
+                      border: '1px solid rgba(234, 179, 8, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--accent-gold)',
+                    }}
+                  >
+                    <Key size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', margin: 0, fontWeight: '800' }}>
+                      Change Portal Password
+                    </h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      {profile?.fullName} • {profile?.email}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowChangePasswordModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem',
+                    padding: '4px',
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Informational banner: Already authenticated */}
+              <div
+                style={{
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 14px',
+                  marginBottom: '18px',
+                  fontSize: '0.82rem',
+                  color: '#93C5FD',
+                  lineHeight: '1.4',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                }}
+              >
+                <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#60A5FA' }} />
+                <div>
+                  <strong>Verified Session:</strong> Because you are already logged in, your new password will update immediately across the entire library system without requiring an email link.
+                </div>
+              </div>
+
+              {changePassSuccess ? (
+                <div
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '24px 20px',
+                    textAlign: 'center',
+                    color: '#34D399',
+                  }}
+                >
+                  <CheckCircle2 size={40} style={{ margin: '0 auto 10px auto', display: 'block' }} />
+                  <h4 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: '800', color: '#FFFFFF' }}>
+                    Password Changed Successfully!
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#A7F3D0' }}>
+                    Your password has been updated across your account and directory profile.
+                  </p>
+                </div>
+              ) : (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setChangePassError(null);
+
+                    if (newPassword !== confirmPassword) {
+                      setChangePassError('New password and confirm password do not match.');
+                      return;
+                    }
+
+                    const policy = validatePasswordPolicy(newPassword);
+                    if (!policy.valid) {
+                      setChangePassError(policy.errors.join(' • '));
+                      return;
+                    }
+
+                    setChangePassLoading(true);
+                    try {
+                      const res = await changeLoggedInMemberPassword?.(newPassword);
+                      if (res && !res.success) {
+                        setChangePassError(res.error || 'Failed to update password.');
+                        return;
+                      }
+
+                      setChangePassSuccess(true);
+                      setTimeout(() => {
+                        setShowChangePasswordModal(false);
+                        setChangePassSuccess(false);
+                        setNewPassword('');
+                        setConfirmPassword('');
+                      }, 2000);
+                    } catch (err: any) {
+                      setChangePassError(err?.message || 'An unexpected error occurred while updating password.');
+                    } finally {
+                      setChangePassLoading(false);
+                    }
+                  }}
+                >
+                  {changePassError && (
+                    <div
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#FCA5A5',
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: '0.84rem',
+                        marginBottom: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                      <span>{changePassError}</span>
+                    </div>
+                  )}
+
+                  {/* New Password */}
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label className="form-label" style={{ fontSize: '0.85rem' }}>
+                      New Password *
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        className="form-input"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Enter strong new password"
+                        required
+                        style={{ paddingRight: '40px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: 0,
+                          display: 'flex',
+                        }}
+                      >
+                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label className="form-label" style={{ fontSize: '0.85rem' }}>
+                      Confirm New Password *
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        className="form-input"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat new password exactly"
+                        required
+                        style={{ paddingRight: '40px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: 0,
+                          display: 'flex',
+                        }}
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    {confirmPassword && newPassword !== confirmPassword && (
+                      <div style={{ color: '#F87171', fontSize: '0.76rem', marginTop: '4px' }}>
+                        Passwords do not match
+                      </div>
+                    )}
+                    {confirmPassword && newPassword === confirmPassword && (
+                      <div style={{ color: '#34D399', fontSize: '0.76rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Check size={12} /> Passwords match!
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Real-time Password Policy Checklist */}
+                  <div
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '10px 14px',
+                      marginBottom: '20px',
+                      fontSize: '0.78rem',
+                    }}
+                  >
+                    <div style={{ color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '6px' }}>
+                      Password Strength Requirements:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      <div style={{ color: newPassword.length >= 8 ? '#34D399' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {newPassword.length >= 8 ? <Check size={12} color="#34D399" /> : '○'} At least 8 characters
+                      </div>
+                      <div style={{ color: /[A-Z]/.test(newPassword) ? '#34D399' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {/[A-Z]/.test(newPassword) ? <Check size={12} color="#34D399" /> : '○'} 1 Uppercase (A-Z)
+                      </div>
+                      <div style={{ color: /[0-9]/.test(newPassword) ? '#34D399' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {/[0-9]/.test(newPassword) ? <Check size={12} color="#34D399" /> : '○'} 1 Number (0-9)
+                      </div>
+                      <div style={{ color: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword) ? '#34D399' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword) ? <Check size={12} color="#34D399" /> : '○'} 1 Special char (!@#$)
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Form Buttons */}
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => setShowChangePasswordModal(false)}
+                      disabled={changePassLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn-gold"
+                      disabled={changePassLoading || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                      style={{
+                        padding: '10px 20px',
+                        fontWeight: '800',
+                        opacity: (!newPassword || !confirmPassword || newPassword !== confirmPassword) ? 0.5 : 1,
+                      }}
+                    >
+                      {changePassLoading ? 'Updating Password...' : 'Update Password'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
