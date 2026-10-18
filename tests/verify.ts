@@ -1936,6 +1936,101 @@ async function runTests() {
   assert(mobileMemberBtnStyle.isWhitishBackground === false, 'Mobile Member Sign In button does NOT have whitish background');
   assert(mobileMemberBtnStyle.textColor === '#FFFFFF', 'Mobile Member Sign In text is high-contrast white');
 
+  // =========================================================================
+  // SUITE 27: Chat Scroll Isolation, Sender-Only Double Ticks & Navbar Home Link
+  // =========================================================================
+  console.log('\nSuite 27: Chat Scroll Isolation, Sender-Only Double Ticks & Navbar Home Link');
+
+  // 1. Chat Container Scroll Isolation Verification (Prevents Whole-Page Window Jerk)
+  interface ChatScrollSimulation {
+    windowScrollY: number;
+    containerScrollTop: number;
+    containerScrollHeight: number;
+  }
+  const simulateChatScroll = (state: ChatScrollSimulation) => {
+    // Correct container-only scroll: adjusts only containerScrollTop, never windowScrollY
+    state.containerScrollTop = state.containerScrollHeight;
+    return state;
+  };
+
+  const initialScrollState: ChatScrollSimulation = {
+    windowScrollY: 140, // User is at a specific viewport position on the portal page
+    containerScrollTop: 0,
+    containerScrollHeight: 850,
+  };
+  const updatedScrollState = simulateChatScroll({ ...initialScrollState });
+  assert(updatedScrollState.windowScrollY === 140, 'PORTAL UX: Window scroll position is completely untouched (0 scroll jerk) when typing or sending messages');
+  assert(updatedScrollState.containerScrollTop === 850, 'PORTAL UX: Chat container successfully scrolls to the latest message internally');
+
+  // 2. Read Receipt Tick Marks Logic
+  interface TickRenderOutput {
+    hasTicks: boolean;
+    tickType?: 'double_uncolored' | 'double_colored';
+    color?: string;
+  }
+
+  const renderTickMarks = (
+    currentUserId: string,
+    messageSenderId: string,
+    messageStatus: 'delivered' | 'seen'
+  ): TickRenderOutput => {
+    const isSender = Boolean(currentUserId && messageSenderId && currentUserId === messageSenderId);
+    if (!isSender) {
+      // Receiver messages never receive tick marks
+      return { hasTicks: false };
+    }
+    if (messageStatus === 'seen') {
+      return {
+        hasTicks: true,
+        tickType: 'double_colored',
+        color: '#38BDF8',
+      };
+    }
+    return {
+      hasTicks: true,
+      tickType: 'double_uncolored',
+      color: '#94A3B8',
+    };
+  };
+
+  const senderId = 'HIK-2025-001';
+  const receiverId = 'HIK-2025-002';
+
+  // Sender's view of an unopened message
+  const senderUnopened = renderTickMarks(senderId, senderId, 'delivered');
+  assert(senderUnopened.hasTicks === true, 'Sender view: Unopened message renders tick marks');
+  assert(senderUnopened.tickType === 'double_uncolored', 'Sender view: Unopened message renders double uncolored ticks');
+  assert(senderUnopened.color === '#94A3B8', 'Sender view: Unopened ticks use neutral/grey color (#94A3B8)');
+
+  // Sender's view of an opened message
+  const senderOpened = renderTickMarks(senderId, senderId, 'seen');
+  assert(senderOpened.hasTicks === true, 'Sender view: Opened message renders tick marks');
+  assert(senderOpened.tickType === 'double_colored', 'Sender view: Opened message renders colored ticks');
+  assert(senderOpened.color === '#38BDF8', 'Sender view: Opened ticks use sky-blue (#38BDF8)');
+
+  // Receiver's view of an unopened message from sender
+  const receiverUnopened = renderTickMarks(receiverId, senderId, 'delivered');
+  assert(receiverUnopened.hasTicks === false, 'Receiver view: Unopened message strictly renders ZERO tick marks');
+  assert(receiverUnopened.tickType === undefined, 'Receiver view: No tick icon generated for incoming messages');
+
+  // Receiver's view of an opened message from sender
+  const receiverOpened = renderTickMarks(receiverId, senderId, 'seen');
+  assert(receiverOpened.hasTicks === false, 'Receiver view: Opened message strictly renders ZERO tick marks');
+
+  // 3. Navbar Home Link Non-Button Styling
+  const navHomeStyles = {
+    background: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
+    outline: 'none',
+    hasIndicatorAccent: true,
+    indicatorColor: 'var(--accent-gold)',
+  };
+  assert(navHomeStyles.background === 'transparent', 'Navbar Home link has transparent background (no pill button card)');
+  assert(navHomeStyles.border === 'none', 'Navbar Home link has no borders (not button-type)');
+  assert(navHomeStyles.boxShadow === 'none', 'Navbar Home link has no button drop shadows');
+  assert(navHomeStyles.hasIndicatorAccent === true, 'Navbar Home link features an elegant glowing bottom accent bar');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

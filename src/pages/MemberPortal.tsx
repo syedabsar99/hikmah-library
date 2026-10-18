@@ -43,6 +43,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
   // Member live profile state (synced with DataService)
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(authMemberProfile);
+  const profile = memberProfile || authMemberProfile;
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -91,12 +92,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     total: 0,
     bySender: {},
   });
-  const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const refreshUnreadCounts = async () => {
-    if (!currentUser?.memberId) return;
+    const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    if (!currentId) return;
     try {
-      const counts = await DataService.getUnreadChatCounts(currentUser.memberId);
+      const counts = await DataService.getUnreadChatCounts(currentId);
       setUnreadChatCounts(counts);
     } catch (err) {
       console.warn('Error refreshing unread chat counts:', err);
@@ -104,11 +106,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   };
 
   const loadMessagesForPeer = async (peer: MemberProfile, key: CryptoKey, markSeen = true) => {
-    if (!currentUser?.memberId) return;
+    const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    if (!currentId) return;
     try {
-      const sessionId = [currentUser.memberId, peer.id].sort().join('--');
+      const sessionId = [currentId, peer.id].sort().join('--');
       if (markSeen) {
-        await DataService.markMessagesSeen(sessionId, currentUser.memberId);
+        await DataService.markMessagesSeen(sessionId, currentId);
       }
       const rawMessages = await DataService.getChatMessages(sessionId);
 
@@ -197,12 +200,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
   // Initialize E2E Chat Session with Administration / Peer
   const initChatSession = async (peer: MemberProfile) => {
-    if (!currentUser?.memberId) return;
+    const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    if (!currentId) return;
     setActiveChatPeer(peer);
 
     try {
       // 1. Derive mutual client-side AES-GCM 256-bit key
-      const key = await deriveSessionKey(currentUser.memberId, peer.id);
+      const key = await deriveSessionKey(currentId, peer.id);
       setSessionKey(key);
 
       // 2. Clear unread count for this peer in state immediately
@@ -224,10 +228,11 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   };
 
   useEffect(() => {
-    if (currentUser?.memberId) {
+    const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    if (currentId) {
       initChatSession(adminPeer);
     }
-  }, [currentUser?.memberId]);
+  }, [currentUser?.memberId, profile?.id]);
 
   // Polling and real-time updates for chat and unread message notifications
   useEffect(() => {
@@ -256,47 +261,50 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     };
   }, [currentUser?.memberId, isChatOpen, activeChatPeer?.id, sessionKey]);
 
-  // Scroll to bottom when new messages arrive or chat opens
+  // Internal chat container scroll ONLY (NEVER scroll the browser window/page downwards)
   useEffect(() => {
-    if (isChatOpen) {
-      chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isChatOpen && chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [isChatOpen, chatMessages.length]);
+  }, [isChatOpen, chatMessages.length, activeChatPeer?.id]);
 
   // Send E2E Encrypted Message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !activeChatPeer || !sessionKey || !currentUser?.memberId) return;
+    const currentUserId = (currentUser?.memberId || profile?.id || authMemberProfile?.id || '').trim();
+    if (!chatInput.trim() || !activeChatPeer || !sessionKey || !currentUserId) return;
 
     setIsEncrypting(true);
     try {
       const plaintext = chatInput.trim();
-      const sessionId = [currentUser.memberId, activeChatPeer.id].sort().join('--');
+      const sessionId = [currentUserId, activeChatPeer.id].sort().join('--');
 
       // Client-side AES-GCM encryption
       const { ciphertext, iv } = await encryptMessage(plaintext, sessionKey);
 
-      // Transport ciphertext to storage with status 'sent' and 12-hour expiration
+      // Transport ciphertext to storage with status 'delivered' (unopened by recipient) and 12-hour expiration
       const sentMsg = await DataService.sendChatMessage({
         sessionId,
-        senderId: currentUser.memberId,
-        senderName: currentUser.name,
+        senderId: currentUserId,
+        senderName: currentUser?.name || profile?.fullName || 'Member',
         recipientId: activeChatPeer.id,
         ciphertext,
         iv,
-        status: 'sent',
+        status: 'delivered',
       });
 
-      setChatMessages((prev) => [...prev, { ...sentMsg, decryptedText: plaintext, status: 'sent' }]);
+      setChatMessages((prev) => [...prev, { ...sentMsg, decryptedText: plaintext, status: 'delivered' }]);
       setChatInput('');
 
-      // WhatsApp status progression: 'sent' -> 'delivered' after 500ms
-      setTimeout(async () => {
-        await DataService.updateMessageStatus(sentMsg.id, 'delivered');
-        setChatMessages((prev) =>
-          prev.map((m) => (m.id === sentMsg.id ? { ...m, status: 'delivered' } : m))
-        );
-      }, 500);
+      // Smooth scroll inside chat container only (keeps window/page scroll completely locked)
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth',
+          });
+        }
+      }, 50);
     } catch (err) {
       console.error('Failed to encrypt and send message', err);
     } finally {
@@ -355,9 +363,6 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     }
     return name.slice(0, 2).toUpperCase();
   };
-
-  const profile = memberProfile || authMemberProfile;
-
 
   // Fee calculation
   const isFeeOverdue = profile?.feeStatus === 'Overdue';
@@ -1523,6 +1528,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
                 {/* Chat Messages Body */}
                 <div
+                  ref={chatContainerRef}
                   style={{
                     height: '380px',
                     overflowY: 'auto',
@@ -1553,31 +1559,32 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
                   {chatMessages.length > 0 ? (
                     chatMessages.map((msg) => {
-                      const isMine = msg.senderId === currentUser?.memberId;
+                      const currentUserId = (currentUser?.memberId || profile?.id || authMemberProfile?.id || '').trim();
+                      const isSender = Boolean(currentUserId && msg.senderId && msg.senderId.trim() === currentUserId);
                       return (
                         <div
                           key={msg.id}
                           style={{
-                            alignSelf: isMine ? 'flex-end' : 'flex-start',
+                            alignSelf: isSender ? 'flex-end' : 'flex-start',
                             maxWidth: '78%',
                             display: 'flex',
                             flexDirection: 'column',
-                            alignItems: isMine ? 'flex-end' : 'flex-start',
+                            alignItems: isSender ? 'flex-end' : 'flex-start',
                           }}
                         >
                           <div
                             style={{
                               padding: '11px 16px',
-                              borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                              background: isMine
+                              borderRadius: isSender ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                              background: isSender
                                 ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)'
                                 : 'rgba(30, 41, 59, 0.88)',
-                              color: isMine ? '#080C14' : '#F8FAFC',
-                              fontWeight: isMine ? '600' : '400',
+                              color: isSender ? '#080C14' : '#F8FAFC',
+                              fontWeight: isSender ? '600' : '400',
                               fontSize: '0.92rem',
                               wordBreak: 'break-word',
-                              boxShadow: isMine ? '0 4px 16px rgba(217, 119, 6, 0.3)' : '0 4px 14px rgba(0, 0, 0, 0.3)',
-                              border: isMine ? 'none' : '1px solid rgba(255, 255, 255, 0.08)',
+                              boxShadow: isSender ? '0 4px 16px rgba(217, 119, 6, 0.3)' : '0 4px 14px rgba(0, 0, 0, 0.3)',
+                              border: isSender ? 'none' : '1px solid rgba(255, 255, 255, 0.08)',
                             }}
                           >
                             {msg.decryptedText || '🔒 [Encrypted Message]'}
@@ -1594,14 +1601,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                             }}
                           >
                             <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {isMine && (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '2px' }}>
+                            {/* Read receipts: strictly rendered ONLY on sender's messages (never on receiver's end) */}
+                            {isSender && (
+                              <span
+                                className="chat-tick-receipt"
+                                data-status={msg.status}
+                                style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '2px' }}
+                              >
                                 {msg.status === 'seen' ? (
-                                  <span title="Seen"><CheckCheck size={14} style={{ color: '#38BDF8' }} /></span>
-                                ) : msg.status === 'delivered' ? (
-                                  <span title="Delivered"><CheckCheck size={14} style={{ color: '#94A3B8' }} /></span>
+                                  <span title="Read / Opened"><CheckCheck size={14} style={{ color: '#38BDF8' }} /></span>
                                 ) : (
-                                  <span title="Sent"><Check size={13} style={{ color: '#94A3B8' }} /></span>
+                                  <span title="Unopened / Delivered"><CheckCheck size={14} style={{ color: '#94A3B8' }} /></span>
                                 )}
                               </span>
                             )}
@@ -1614,7 +1624,6 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                       🔒 No messages yet. Send a private note to {activeChatPeer.fullName}.
                     </div>
                   )}
-                  <div ref={chatMessagesEndRef} />
                 </div>
 
                 {/* Chat Send Input Form */}
