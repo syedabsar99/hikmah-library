@@ -83,18 +83,7 @@ class RealEmailAuthService {
     const norm = this.normalizeEmail(email);
     if (!norm.isValid) return false;
 
-    // Check Cloud Firestore if configured
-    if (isFirebaseConfigured() && db) {
-      try {
-        const adminDoc = await getDoc(doc(db, 'admin_roles', norm.email));
-        if (adminDoc.exists() && adminDoc.data()?.role === 'admin') {
-          return true;
-        }
-      } catch {
-        // Fallback
-      }
-    }
-
+    // 1. Instant check: Known official administrators
     if (
       norm.email === OFFICIAL_ADMIN_EMAIL.toLowerCase() ||
       norm.email === 'admin@hikmahlibrary.com'
@@ -102,6 +91,7 @@ class RealEmailAuthService {
       return true;
     }
 
+    // 2. Check local administrator cache
     try {
       const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
       if (item) {
@@ -113,6 +103,22 @@ class RealEmailAuthService {
     } catch {
       // Fallback
     }
+
+    // 3. Optional Cloud Firestore check with 1.5s timeout (never hangs)
+    if (isFirebaseConfigured() && db) {
+      const activeDb = db;
+      try {
+        const fetchDoc = async () => {
+          const adminDoc = await getDoc(doc(activeDb, 'admin_roles', norm.email));
+          return adminDoc.exists() && adminDoc.data()?.role === 'admin';
+        };
+        const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500));
+        return await Promise.race([fetchDoc(), timeout]);
+      } catch {
+        // Fallback
+      }
+    }
+
     return false;
   }
 
@@ -206,19 +212,23 @@ class RealEmailAuthService {
 
     const actionCodeSettings: ActionCodeSettings = {
       url: this.getActionHandlerUrl(),
-      handleCodeInApp: true,
     };
 
     try {
-      await sendPasswordResetEmail(auth, norm.email, actionCodeSettings);
+      const sendPromise = sendPasswordResetEmail(auth, norm.email, actionCodeSettings);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Password reset request timed out. Please check your internet connection and try again.')), 15000)
+      );
+
+      await Promise.race([sendPromise, timeoutPromise]);
       this.setCooldown(norm.email);
 
-      await DataService.addAuditLog(
+      DataService.addAuditLog(
         'ADMIN_PASSWORD_RESET_DISPATCHED',
         'AUTH',
         `Official Firebase password reset email dispatched to administrator (${norm.email}).`,
         'Chief Administrator Syed Absar'
-      );
+      ).catch(() => {});
 
       return {
         success: true,
@@ -238,25 +248,27 @@ class RealEmailAuthService {
       } else if (code === 'auth/user-not-found') {
         // Maintain account enumeration safety if user has not yet been registered in Firebase Auth
         this.setCooldown(norm.email);
-        await DataService.addAuditLog(
+        DataService.addAuditLog(
           'ADMIN_RESET_USER_NOT_FOUND',
           'AUTH',
           `Admin ${norm.email} exists in directory/rules but not yet provisioned in Firebase Auth.`,
           'Security Engine'
-        );
+        ).catch(() => {});
         return {
           success: true,
           cooldownSeconds: 60,
           message: GENERIC_RESET_SUCCESS_MESSAGE,
         };
+      } else if (err?.message) {
+        failureReason = err.message;
       }
 
-      await DataService.addAuditLog(
+      DataService.addAuditLog(
         'AUTH_PROVIDER_ERROR',
         'AUTH',
         `sendPasswordResetEmail failed for admin ${norm.email}: ${err?.message || code}`,
         'System'
-      );
+      ).catch(() => {});
 
       return {
         success: false,
@@ -291,12 +303,12 @@ class RealEmailAuthService {
     // return standard success message without dispatching an email.
     if (!isMember) {
       this.setCooldown(norm.email);
-      await DataService.addAuditLog(
+      DataService.addAuditLog(
         'MEMBER_RESET_IGNORED',
         'AUTH',
         `Password reset requested for unregistered member address (${norm.email}). Ignored safely.`,
         'Security Engine'
-      );
+      ).catch(() => {});
       return {
         success: true,
         cooldownSeconds: 60,
@@ -308,12 +320,12 @@ class RealEmailAuthService {
     if (!isFirebaseConfigured()) {
       const configError =
         'Firebase Authentication is not configured. Please add VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, and VITE_FIREBASE_PROJECT_ID to environment variables to enable email password reset.';
-      await DataService.addAuditLog(
+      DataService.addAuditLog(
         'AUTH_CONFIG_MISSING',
         'AUTH',
         `Member password reset requested for ${norm.email}, but Firebase Auth configuration is missing.`,
         'System'
-      );
+      ).catch(() => {});
       return {
         success: false,
         error: configError,
@@ -329,19 +341,23 @@ class RealEmailAuthService {
 
     const actionCodeSettings: ActionCodeSettings = {
       url: this.getActionHandlerUrl(),
-      handleCodeInApp: true,
     };
 
     try {
-      await sendPasswordResetEmail(auth, norm.email, actionCodeSettings);
+      const sendPromise = sendPasswordResetEmail(auth, norm.email, actionCodeSettings);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Password reset request timed out. Please check your internet connection and try again.')), 15000)
+      );
+
+      await Promise.race([sendPromise, timeoutPromise]);
       this.setCooldown(norm.email);
 
-      await DataService.addAuditLog(
+      DataService.addAuditLog(
         'MEMBER_PASSWORD_RESET_DISPATCHED',
         'AUTH',
         `Official Firebase password reset email dispatched to student member (${norm.email}).`,
         'Self Service'
-      );
+      ).catch(() => {});
 
       return {
         success: true,

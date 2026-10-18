@@ -647,8 +647,10 @@ export const DataService = {
     if (this.isLiveFirebase() && db) {
       try {
         const q = query(collection(db, 'member_profiles'), orderBy('id', 'asc'));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
+        const fetchPromise = getDocs(q);
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+        const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
+        if (snapshot && !snapshot.empty) {
           list = snapshot.docs.map((doc) => doc.data() as MemberProfile);
         }
       } catch (err) {
@@ -1462,11 +1464,9 @@ export const DataService = {
     saveLocal(KEYS.AUDIT_LOGS, updated);
 
     if (this.isLiveFirebase() && db) {
-      try {
-        await setDoc(doc(db, 'audit_logs', newLog.id), newLog);
-      } catch (err) {
+      setDoc(doc(db, 'audit_logs', newLog.id), newLog).catch((err) => {
         console.warn('Firebase addAuditLog error:', err);
-      }
+      });
     }
   },
 
