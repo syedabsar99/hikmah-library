@@ -1226,7 +1226,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const overdueMembers = members.filter((m) => m.feeStatus === 'Overdue');
   const dueSoonMembers = members.filter((m) => m.feeStatus === 'Due');
   const paidMembers = members.filter((m) => m.feeStatus === 'Paid');
-  const totalRevenueProjected = members.reduce((sum, m) => sum + (m.monthlyFee || 1200), 0);
 
 
   const filteredMembers = members.filter((m) => {
@@ -1870,14 +1869,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 marginBottom: '26px',
               }}
             >
-              <div className="glass-panel" style={{ padding: '22px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600' }}>MONTHLY REVENUE</div>
-                <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--accent-gold)', marginTop: '4px' }}>
-                  ₹{totalRevenueProjected.toLocaleString()}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Based on active member seats</div>
-              </div>
-
               <div className="glass-panel" style={{ padding: '22px', border: overdueMembers.length > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: '0.8rem', color: '#F87171', fontWeight: '700' }}>OVERDUE EXPIRIES</div>
                 <div style={{ fontSize: '2rem', fontWeight: '800', color: '#EF4444', marginTop: '4px' }}>
