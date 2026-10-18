@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { DataService } from '../services/dataService';
+import { OtpService, type OtpDispatchResult } from '../services/otpService';
 import { EmailPasswordResetModal } from '../components/EmailPasswordResetModal';
+import { PasswordResetModal } from '../components/PasswordResetModal';
 import {
   UserCheck,
   Lock,
   Mail,
+  Phone,
   AlertTriangle,
   ArrowLeft,
   Eye,
   EyeOff,
   UserPlus,
   CheckCircle2,
+  KeyRound,
+  ShieldCheck,
+  MessageSquare,
 } from 'lucide-react';
 
 interface MemberLoginProps {
@@ -25,7 +31,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
   // Mode: 'login' | 'register'
   const [mode, setMode] = useState<'login' | 'register'>('login');
 
-  // Sign In State - ALWAYS initialized to empty string (no dummy values)
+  // Sign In State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,17 +49,24 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
     } catch {}
   }, []);
 
-  // First-Time Registration State
+  // First-Time Registration Multi-Step State
+  // Step 1: 'verify_info' -> Step 2: 'verify_otp' -> Step 3: 'set_password'
+  const [regStep, setRegStep] = useState<'verify_info' | 'verify_otp' | 'set_password'>('verify_info');
   const [regEmail, setRegEmail] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regOtp, setRegOtp] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regLoading, setRegLoading] = useState(false);
+  const [otpDispatchData, setOtpDispatchData] = useState<OtpDispatchResult | null>(null);
+  const [verifiedMemberName, setVerifiedMemberName] = useState<string>('');
 
-  // Email Password Reset Modal State
+  // Password Reset Modals State
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
 
   // Handle Sign In Submit
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -81,16 +94,83 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
     }
   };
 
-  // Handle First-Time Registration Submit
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
+  // Step 1: Verify Directory Admission & Dispatch OTP
+  const handleVerifyAdmission = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError(null);
 
     const cleanEmail = regEmail.trim().toLowerCase();
-    if (!cleanEmail) {
-      setRegError('Please provide your student email address registered during library admission.');
+    const cleanPhone = regPhone.replace(/\D/g, '').slice(-10);
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setRegError('Please provide your valid student email address registered during admission.');
       return;
     }
+
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setRegError('Please provide your valid 10-digit mobile number registered during admission.');
+      return;
+    }
+
+    setRegLoading(true);
+
+    try {
+      // 1. Look up student in directory by email
+      const member = await DataService.getMemberByEmail(cleanEmail);
+
+      if (!member) {
+        setRegError(
+          `Access Denied: The email "${cleanEmail}" was not found in the library directory. Only students whose admission was recorded by library administration can activate portal access. Please contact the front desk or director.`
+        );
+        setRegLoading(false);
+        return;
+      }
+
+      // 2. Strict contact number match verification
+      const memberCleanPhone = member.phoneNumber.replace(/\D/g, '').slice(-10);
+      if (memberCleanPhone !== cleanPhone) {
+        setRegError(
+          `Access Denied: Mobile number (+91 ${cleanPhone}) does not match the registered contact phone on file for "${member.fullName}". Both registered email and phone number must match directory records.`
+        );
+        setRegLoading(false);
+        return;
+      }
+
+      // 3. Dispatch genuine OTP to verified student phone & email
+      const dispatch = OtpService.generateOtp(cleanPhone, member.fullName);
+      setOtpDispatchData(dispatch);
+      setVerifiedMemberName(member.fullName);
+      setRegStep('verify_otp');
+    } catch (err: any) {
+      setRegError(err?.message || 'Failed to dispatch verification code. Please try again.');
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  // Step 2: Verify OTP
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+
+    const cleanPhone = regPhone.replace(/\D/g, '').slice(-10);
+    const result = OtpService.verifyOtp(cleanPhone, regOtp);
+
+    if (!result.success) {
+      setRegError(result.error || 'Incorrect or expired verification code. Please check your phone / email.');
+      return;
+    }
+
+    // OTP Verified successfully! Move to password creation
+    setRegStep('set_password');
+  };
+
+  // Step 3: Commit Password & Complete Activation
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+
+    const cleanEmail = regEmail.trim().toLowerCase();
 
     if (!regPassword) {
       setRegError('Please choose a password for your portal account.');
@@ -110,18 +190,6 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
     setRegLoading(true);
 
     try {
-      // STEP 1: Verify whether the student email exists in the admin directory
-      const member = await DataService.getMemberByEmail(cleanEmail);
-
-      if (!member) {
-        setRegError(
-          `The email address "${cleanEmail}" is not found in the library directory. Only students whose email was registered by library administration during admission can activate portal access. Please contact the front desk or administrator.`
-        );
-        setRegLoading(false);
-        return;
-      }
-
-      // STEP 2: Commit new password to member profile
       const updated = await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
       if (!updated) {
         setRegError('Failed to update student password. Please try again or contact administration.');
@@ -129,27 +197,23 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
         return;
       }
 
-      // STEP 3: Sync credentials to server auth state for instant cross-device reset & login
-      await fetch('/api/auth/member-creds', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, passcode: regPassword }),
-      }).catch(() => {});
-
-      // STEP 4: Success - prepopulate sign in form and return student to login view
+      // Prepopulate login form and return to login view
       setEmail(cleanEmail);
       setPassword(regPassword);
       try {
         localStorage.setItem('hikmah_saved_member_email', cleanEmail);
       } catch {}
+
       setSuccessMessage(
-        `Registration complete for ${member.fullName}! Your password has been set. Please sign in below.`
+        `Account activated successfully for ${verifiedMemberName || 'Student'}! Your password has been set. Please sign in below.`
       );
+      setRegStep('verify_info');
       setRegPassword('');
       setRegConfirmPassword('');
+      setRegOtp('');
       setMode('login');
     } catch {
-      setRegError('An unexpected error occurred during student registration. Please try again.');
+      setRegError('An unexpected error occurred during password configuration.');
     } finally {
       setRegLoading(false);
     }
@@ -225,7 +289,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
               </p>
             </div>
 
-            {/* Success Message (e.g. after first-time registration) */}
+            {/* Success Message */}
             {successMessage && (
               <div
                 style={{
@@ -279,20 +343,11 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                     className="form-input input-with-icon-left"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email here"
+                    placeholder="Enter your registered email"
                     required
-                    autoComplete="off"
-                    list="member-email-suggestions"
+                    autoComplete="email"
                   />
-                  <datalist id="member-email-suggestions">
-                    {localStorage.getItem('hikmah_saved_member_email') && (
-                      <option value={localStorage.getItem('hikmah_saved_member_email')!} />
-                    )}
-                  </datalist>
-                  <Mail
-                    size={18}
-                    className="form-icon-left"
-                  />
+                  <Mail size={18} className="form-icon-left" />
                 </div>
                 <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                   Must match the email address recorded upon admission by the librarian.
@@ -301,7 +356,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
 
               <div className="form-group" style={{ marginBottom: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                  <label className="form-label" style={{ color: '#E2E8F0', margin: 0 }}>Password / Passcode</label>
+                  <label className="form-label" style={{ color: '#E2E8F0', margin: 0 }}>Password</label>
                   <button
                     type="button"
                     id="member-forgot-password-link"
@@ -326,14 +381,11 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                     className="form-input input-with-icon-left input-with-icon-right"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password here"
+                    placeholder="Enter your password"
                     required
-                    autoComplete="new-password"
+                    autoComplete="current-password"
                   />
-                  <Lock
-                    size={18}
-                    className="form-icon-left"
-                  />
+                  <Lock size={18} className="form-icon-left" />
                   <button
                     type="button"
                     id="member-toggle-password-visibility-btn"
@@ -369,6 +421,26 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
               </button>
             </form>
 
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setShowPhoneModal(true)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--accent-gold)',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: '600',
+                }}
+              >
+                <KeyRound size={14} /> Alternative: Reset via Mobile OTP
+              </button>
+            </div>
+
             {/* Switch to First-Time Registration Option */}
             <div
               style={{
@@ -379,13 +451,14 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
               }}
             >
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '6px' }}>
-                First time accessing the portal?
+                Admitted student accessing the portal for the first time?
               </div>
               <button
                 type="button"
                 id="member-register-now-btn"
                 onClick={() => {
                   setMode('register');
+                  setRegStep('verify_info');
                   setError(null);
                   setSuccessMessage(null);
                   setRegEmail(email);
@@ -403,14 +476,14 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                   gap: '6px',
                 }}
               >
-                <UserPlus size={16} /> Register Now (First-Time Activation)
+                <UserPlus size={16} /> Activate Account / Set Password
               </button>
             </div>
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* VIEW 2: FIRST-TIME STUDENT REGISTRATION                        */}
+        {/* VIEW 2: FIRST-TIME STUDENT ACTIVATION (DIRECTORY-GATED + OTP) */}
         {/* ============================================================== */}
         {mode === 'register' && (
           <div>
@@ -432,10 +505,10 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                 <UserPlus size={32} />
               </div>
               <h2 style={{ fontSize: 'clamp(1.3rem, 4vw, 1.55rem)', color: '#F8FAFC', marginBottom: '6px', fontWeight: '800' }}>
-                First-Time Student Registration
+                Student Account Activation
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: '1.5' }}>
-                Activate your account by verifying your email and choosing your private password
+                Strictly restricted to enrolled students. Verify your admission credentials to set your password.
               </p>
             </div>
 
@@ -461,149 +534,282 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
               </div>
             )}
 
-            <form onSubmit={handleRegisterSubmit} autoComplete="off">
-              {/* Step 1: Registered Student Email */}
-              <div className="form-group" style={{ marginBottom: '18px' }}>
-                <label className="form-label" style={{ color: '#E2E8F0' }}>
-                  Registered Student Email Address *
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="email"
-                    id="member-reg-email-input"
-                    className="form-input input-with-icon-left"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="Enter your email here"
-                    required
-                    autoComplete="off"
-                    list="member-email-suggestions"
-                  />
-                  <Mail
-                    size={18}
-                    className="form-icon-left"
-                  />
-                </div>
-                <div style={{ fontSize: '0.74rem', color: '#93C5FD', marginTop: '4px' }}>
-                  ℹ️ Only emails registered by the administrator in the library directory are permitted to register.
-                </div>
-              </div>
-
-              {/* Step 2: Choose Password */}
-              <div className="form-group" style={{ marginBottom: '18px' }}>
-                <label className="form-label" style={{ color: '#E2E8F0' }}>
-                  Choose Your Password *
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showRegPassword ? 'text' : 'password'}
-                    id="member-reg-password-input"
-                    className="form-input input-with-icon-left input-with-icon-right"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Enter password here"
-                    required
-                    autoComplete="new-password"
-                  />
-                  <Lock
-                    size={18}
-                    className="form-icon-left"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegPassword(!showRegPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '12px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'transparent',
-                      border: 'none',
-                      color: showRegPassword ? 'var(--accent-gold)' : '#94A3B8',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '4px',
-                    }}
-                    title={showRegPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Step 3: Confirm Password */}
-              <div className="form-group" style={{ marginBottom: '24px' }}>
-                <label className="form-label" style={{ color: '#E2E8F0' }}>
-                  Confirm Your Password *
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showRegConfirmPassword ? 'text' : 'password'}
-                    id="member-reg-confirm-password-input"
-                    className="form-input input-with-icon-left input-with-icon-right"
-                    value={regConfirmPassword}
-                    onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    placeholder="Enter password again to confirm"
-                    required
-                    autoComplete="new-password"
-                  />
-                  <Lock
-                    size={18}
-                    className="form-icon-left"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '12px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'transparent',
-                      border: 'none',
-                      color: showRegConfirmPassword ? 'var(--accent-gold)' : '#94A3B8',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '4px',
-                    }}
-                    title={showRegConfirmPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showRegConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
+            {/* STEP 1: VERIFY DIRECTORY INFO (EMAIL + PHONE) */}
+            {regStep === 'verify_info' && (
+              <form onSubmit={handleVerifyAdmission} autoComplete="off">
+                <div
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 14px',
+                    fontSize: '0.82rem',
+                    color: '#FEF3C7',
+                    marginBottom: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <ShieldCheck size={18} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
+                  <span>Only registered emails and phone numbers in the library directory can open an account.</span>
                 </div>
 
-                {/* Live Password Match Feedback */}
-                {regConfirmPassword.length > 0 && (
-                  <div style={{ marginTop: '6px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    {regPassword === regConfirmPassword ? (
-                      <span style={{ color: '#34D399', fontWeight: '600' }}>✓ Passwords match perfectly</span>
-                    ) : (
-                      <span style={{ color: '#EF4444', fontWeight: '600' }}>✕ Passwords do not match yet</span>
-                    )}
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label className="form-label" style={{ color: '#E2E8F0' }}>
+                    Registered Student Email *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="email"
+                      id="member-reg-email-input"
+                      className="form-input input-with-icon-left"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="e.g. bilal.ahmed@example.com"
+                      required
+                    />
+                    <Mail size={18} className="form-icon-left" />
                   </div>
-                )}
-              </div>
+                </div>
 
-              <button
-                type="submit"
-                id="member-complete-registration-btn"
-                className="btn-gold"
-                disabled={regLoading}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  fontSize: '1rem',
-                  fontWeight: '700',
-                  opacity: regLoading ? 0.7 : 1,
-                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                  boxShadow: '0 4px 16px rgba(16, 185, 129, 0.35)',
-                }}
-              >
-                {regLoading ? 'Verifying Student Directory...' : 'Set Password & Complete Registration'}
-              </button>
-            </form>
+                <div className="form-group" style={{ marginBottom: '22px' }}>
+                  <label className="form-label" style={{ color: '#E2E8F0' }}>
+                    Registered Mobile Contact Number *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="tel"
+                      id="member-reg-phone-input"
+                      className="form-input input-with-icon-left"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value)}
+                      placeholder="10-digit registered number (e.g. 9876543210)"
+                      required
+                    />
+                    <Phone size={18} className="form-icon-left" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn-gold"
+                  disabled={regLoading}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    fontSize: '1rem',
+                    fontWeight: '700',
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    boxShadow: '0 4px 16px rgba(16, 185, 129, 0.35)',
+                  }}
+                >
+                  {regLoading ? 'Checking Directory...' : 'Verify Admission & Send OTP →'}
+                </button>
+              </form>
+            )}
+
+            {/* STEP 2: VERIFY 6-DIGIT OTP */}
+            {regStep === 'verify_otp' && otpDispatchData && (
+              <form onSubmit={handleVerifyOtp} autoComplete="off">
+                <div
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1px solid #10B981',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '14px',
+                    fontSize: '0.84rem',
+                    color: '#6EE7B7',
+                    marginBottom: '18px',
+                    lineHeight: '1.45',
+                  }}
+                >
+                  <strong>Admission Verified for {verifiedMemberName}!</strong>
+                  <div style={{ marginTop: '4px', color: '#FFFFFF', fontSize: '0.8rem' }}>
+                    Verification code generated for your contact ({otpDispatchData.maskedDestination}).
+                  </div>
+                </div>
+
+                {/* WhatsApp & SMS 1-Click Action Buttons */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
+                  <a
+                    href={otpDispatchData.waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '9px 12px',
+                      fontSize: '0.82rem',
+                      fontWeight: '700',
+                      textDecoration: 'none',
+                      background: 'rgba(37, 211, 102, 0.15)',
+                      border: '1px solid #25D366',
+                      color: '#25D366',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  >
+                    <MessageSquare size={16} /> Send via WhatsApp
+                  </a>
+                  <a
+                    href={otpDispatchData.smsUrl}
+                    className="btn-secondary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '9px 12px',
+                      fontSize: '0.82rem',
+                      fontWeight: '700',
+                      textDecoration: 'none',
+                      background: 'rgba(59, 130, 246, 0.15)',
+                      border: '1px solid #3B82F6',
+                      color: '#93C5FD',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  >
+                    <Phone size={16} /> Send via SMS
+                  </a>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '22px' }}>
+                  <label className="form-label" style={{ color: '#E2E8F0' }}>
+                    Enter 6-Digit Verification Code *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="form-input input-with-icon-left"
+                      value={regOtp}
+                      onChange={(e) => setRegOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="e.g. 123456"
+                      required
+                      autoFocus
+                      maxLength={6}
+                      style={{ letterSpacing: '0.2em', fontSize: '1.1rem', fontWeight: '700' }}
+                    />
+                    <KeyRound size={18} className="form-icon-left" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn-gold"
+                  disabled={regOtp.length < 6}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    fontSize: '1rem',
+                    fontWeight: '700',
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    opacity: regOtp.length < 6 ? 0.6 : 1,
+                  }}
+                >
+                  Verify Code &amp; Continue →
+                </button>
+              </form>
+            )}
+
+            {/* STEP 3: CONFIGURE SECURE PASSWORD */}
+            {regStep === 'set_password' && (
+              <form onSubmit={handleSetPassword} autoComplete="off">
+                <div
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1px solid #10B981',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 14px',
+                    fontSize: '0.82rem',
+                    color: '#6EE7B7',
+                    marginBottom: '18px',
+                  }}
+                >
+                  ✓ Identity verified! Choose a private password for your account.
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label className="form-label" style={{ color: '#E2E8F0' }}>Create Password *</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showRegPassword ? 'text' : 'password'}
+                      className="form-input input-with-icon-left input-with-icon-right"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      required
+                      autoFocus
+                    />
+                    <Lock size={18} className="form-icon-left" />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        color: showRegPassword ? 'var(--accent-gold)' : '#94A3B8',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '22px' }}>
+                  <label className="form-label" style={{ color: '#E2E8F0' }}>Confirm Password *</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showRegConfirmPassword ? 'text' : 'password'}
+                      className="form-input input-with-icon-left input-with-icon-right"
+                      value={regConfirmPassword}
+                      onChange={(e) => setRegConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      required
+                    />
+                    <Lock size={18} className="form-icon-left" />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        color: showRegConfirmPassword ? 'var(--accent-gold)' : '#94A3B8',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {showRegConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn-gold"
+                  disabled={regLoading}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    fontSize: '1rem',
+                    fontWeight: '700',
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  }}
+                >
+                  {regLoading ? 'Committing Password...' : 'Save Password & Complete Activation'}
+                </button>
+              </form>
+            )}
 
             {/* Back to Sign In Option */}
             <div
@@ -622,6 +828,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                 id="member-return-to-login-btn"
                 onClick={() => {
                   setMode('login');
+                  setRegStep('verify_info');
                   setRegError(null);
                 }}
                 style={{
@@ -651,6 +858,19 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
         role="member"
         initialEmail={email}
         onClose={() => setShowEmailModal(false)}
+      />
+
+      {/* MEMBER PHONE OTP MODAL */}
+      <PasswordResetModal
+        isOpen={showPhoneModal}
+        role="member"
+        onClose={() => setShowPhoneModal(false)}
+        onSuccess={(_, newPass) => {
+          if (newPass) {
+            setPassword(newPass);
+          }
+          setShowPhoneModal(false);
+        }}
       />
     </div>
   );

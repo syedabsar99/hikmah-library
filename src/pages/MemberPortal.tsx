@@ -78,9 +78,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     setIsRefreshing(true);
     try {
       const fresh = await DataService.getMemberById(currentUser.memberId);
-      if (fresh) {
-        setMemberProfile(fresh);
+      if (!fresh) {
+        alert('Your library membership account has been permanently terminated by administration.');
+        logout();
+        _onNavigate?.('home');
+        return;
       }
+      setMemberProfile(fresh);
       const warns = await DataService.getWarnings(currentUser.memberId);
       setMyWarnings(warns);
 
@@ -95,6 +99,27 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
   useEffect(() => {
     loadMemberData();
+
+    const handleMemberDeleted = (e: any) => {
+      const deletedId = e.detail?.memberId;
+      if (deletedId === currentUser?.memberId) {
+        alert('Your library membership account has been permanently terminated by administration.');
+        logout();
+        _onNavigate?.('home');
+      } else {
+        loadMemberData();
+      }
+    };
+
+    window.addEventListener('hikmah_member_deleted', handleMemberDeleted);
+    window.addEventListener('storage', loadMemberData);
+    const interval = setInterval(loadMemberData, 3000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hikmah_member_deleted', handleMemberDeleted);
+      window.removeEventListener('storage', loadMemberData);
+    };
   }, [currentUser]);
 
   // Keep local member profile updated when auth profile updates

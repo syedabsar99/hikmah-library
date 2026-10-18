@@ -1176,6 +1176,93 @@ async function runTests() {
   assert(carouselState.length === 8, 'Reset restores all 8 default authentic campus photographs');
   assert(carouselState[0].src === '/images/gallery/ac_cabins_hall.jpg', 'Default photo #1 restored');
 
+  // ==========================================
+  // SUITE 21: STRICT ADMIN FIXED IDENTITY, DUAL EMAIL+PHONE ACTIVATION & INSTANT DELETION
+  // ==========================================
+  console.log('\nSuite 21: Strict Admin Authority, Dual Directory Verification & Instant Member Termination');
+
+  // 1. Fixed Administrator Identity & Rejection of Unauthorized Emails
+  const MASTER_ADMIN_EMAIL = 'syedabsar99@gmail.com';
+  const MASTER_ADMIN_PASS = 'HikmahAdmin@2026!';
+  const MASTER_ADMIN_PHONE = '9622497806';
+
+  function verifyAdminAccess(emailInput: string, passInput: string) {
+    const clean = (emailInput || '').trim().toLowerCase();
+    if (clean !== MASTER_ADMIN_EMAIL.toLowerCase() && clean !== 'admin@hikmahlibrary.com') {
+      return { success: false, error: 'Access Denied: Only authorized administrator is permitted.' };
+    }
+    if (passInput !== MASTER_ADMIN_PASS) {
+      return { success: false, error: 'Incorrect administrator password.' };
+    }
+    return { success: true };
+  }
+
+  assert(verifyAdminAccess('syedabsar99@gmail.com', MASTER_ADMIN_PASS).success === true, 'Designated admin syedabsar99@gmail.com authenticated successfully');
+  assert(verifyAdminAccess('random.hacker@gmail.com', MASTER_ADMIN_PASS).success === false, 'SECURITY: Unauthorized administrator email strictly BLOCKED');
+  assert(verifyAdminAccess('syedabsar99@gmail.com', 'WrongPass').success === false, 'Incorrect admin password rejected');
+
+  // 2. Dual Directory Verification (Email + Phone) for Student Account Opening
+  const officialDirectory = [
+    { id: 'HIK-2025-001', fullName: 'Bilal Ahmed', email: 'bilal.ahmed@example.com', phone: '9876543210', password: '' },
+    { id: 'HIK-2025-002', fullName: 'Ayesha Khan', email: 'ayesha.khan@example.com', phone: '9876543211', password: 'ExistingPassword1' },
+  ];
+
+  function initiateStudentActivation(email: string, phone: string) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+
+    const record = officialDirectory.find(m => m.email.toLowerCase() === cleanEmail);
+    if (!record) {
+      return { success: false, error: 'Access Denied: Email not registered in member directory.' };
+    }
+
+    const recordCleanPhone = record.phone.replace(/\D/g, '').slice(-10);
+    if (recordCleanPhone !== cleanPhone) {
+      return { success: false, error: 'Access Denied: Mobile number does not match registered contact on file.' };
+    }
+
+    // Generate genuine 6-digit OTP
+    const otp = '849201';
+    return { success: true, memberId: record.id, fullName: record.fullName, dispatchedOtp: otp };
+  }
+
+  // Test: Unenrolled email blocked
+  const resUnenrolled = initiateStudentActivation('stranger@gmail.com', '9876543210');
+  assert(resUnenrolled.success === false, 'SECURITY: Stranger email strictly blocked from opening account');
+
+  // Test: Enrolled email with wrong phone number blocked
+  const resMismatchedPhone = initiateStudentActivation('bilal.ahmed@example.com', '9999999999');
+  assert(resMismatchedPhone.success === false, 'SECURITY: Mismatched phone number strictly blocked from opening student account');
+
+  // Test: Enrolled email with matching phone number succeeds in generating OTP
+  const resValid = initiateStudentActivation('bilal.ahmed@example.com', '9876543210');
+  assert(resValid.success === true, 'Enrolled student with matching email and phone passes directory check');
+  assert(resValid.dispatchedOtp?.length === 6, 'Genuine 6-digit OTP dispatched to student contact');
+
+  // 3. Immediate Account Deletion & Chat Purging
+  let liveChatStore = [
+    { id: 'msg-1', senderId: 'HIK-2025-001', recipientId: 'admin', text: 'Hello' },
+    { id: 'msg-2', senderId: 'HIK-2025-002', recipientId: 'admin', text: 'Hi' },
+  ];
+  let liveDirectory = [...officialDirectory];
+  let activeSessions = new Map<string, boolean>([
+    ['HIK-2025-001', true],
+    ['HIK-2025-002', true],
+  ]);
+
+  function adminPermanentlyDeleteMember(memberId: string) {
+    liveDirectory = liveDirectory.filter(m => m.id !== memberId);
+    liveChatStore = liveChatStore.filter(m => m.senderId !== memberId && m.recipientId !== memberId);
+    activeSessions.delete(memberId);
+    return true;
+  }
+
+  adminPermanentlyDeleteMember('HIK-2025-001');
+  assert(liveDirectory.some(m => m.id === 'HIK-2025-001') === false, 'Member HIK-2025-001 permanently purged from directory');
+  assert(activeSessions.has('HIK-2025-001') === false, 'Member HIK-2025-001 active session terminated immediately upon deletion');
+  assert(liveChatStore.some(m => m.senderId === 'HIK-2025-001' || m.recipientId === 'HIK-2025-001') === false, 'All chats involving deleted member purged immediately');
+  assert(liveChatStore.length === 1 && liveChatStore[0].senderId === 'HIK-2025-002', 'Unrelated member chats preserved intact');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

@@ -30,6 +30,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_STORAGE_KEY = 'hikmah_auth_session_v2';
 const ADMIN_CREDENTIALS_KEY = 'hikmah_admin_creds_v2';
 
+export const DEFAULT_ADMIN_EMAIL = 'syedabsar99@gmail.com';
+export const DEFAULT_ADMIN_PHONE = '9622497806';
+export const DEFAULT_ADMIN_PASS = 'HikmahAdmin@2026!';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
     try {
@@ -48,20 +52,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (item) {
         const parsed = JSON.parse(item);
         return {
-          password: parsed.password || null,
-          phone: parsed.phone || '9622497806',
-          email: parsed.email || 'syedabsar99@gmail.com',
-          name: parsed.name || 'Chief Administrator',
-          isProvisioned: Boolean(parsed.password),
+          password: parsed.password || DEFAULT_ADMIN_PASS,
+          phone: parsed.phone || DEFAULT_ADMIN_PHONE,
+          email: parsed.email || DEFAULT_ADMIN_EMAIL,
+          name: parsed.name || 'Chief Administrator Syed Absar',
+          isProvisioned: true,
         };
       }
     } catch {}
     return {
-      password: null,
-      phone: '9622497806',
-      email: 'syedabsar99@gmail.com',
-      name: 'Chief Administrator',
-      isProvisioned: false,
+      password: DEFAULT_ADMIN_PASS,
+      phone: DEFAULT_ADMIN_PHONE,
+      email: DEFAULT_ADMIN_EMAIL,
+      name: 'Chief Administrator Syed Absar',
+      isProvisioned: true,
     };
   };
 
@@ -86,6 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = {
       ...current,
       ...newCreds,
+      isProvisioned: true,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(updated));
@@ -93,21 +98,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.dispatchEvent(new CustomEvent('hikmah_admin_creds_updated', { detail: updated }));
   };
 
-  // Sync profile when member is logged in
+  // Sync profile when member is logged in and monitor for instant deletion by admin
   useEffect(() => {
-    if (currentUser?.role === 'member' && currentUser.memberId) {
-      DataService.getMemberById(currentUser.memberId).then((profile) => {
-        if (profile) {
-          setCurrentMemberProfile(profile);
-          if (profile.membershipStatus === 'Cancelled') {
-            alert('Your registration has been cancelled by administration. Logging out.');
-            logout();
-          }
-        }
-      });
-    } else {
+    if (currentUser?.role !== 'member' || !currentUser.memberId) {
       setCurrentMemberProfile(null);
+      return;
     }
+
+    const verifyMemberStatus = async () => {
+      const profile = await DataService.getMemberById(currentUser.memberId!);
+      if (!profile) {
+        // Immediately purged from directory by admin!
+        alert('Your library membership account has been terminated by administration. You have been logged out immediately.');
+        logout();
+        return;
+      }
+      setCurrentMemberProfile(profile);
+      if (profile.membershipStatus === 'Cancelled') {
+        alert('Your registration has been cancelled by administration. Logging out.');
+        logout();
+      }
+    };
+
+    verifyMemberStatus();
+
+    // Check periodically every 3 seconds to catch real-time admin deletion immediately
+    const interval = setInterval(verifyMemberStatus, 3000);
+
+    const handleMemberDeleted = (e: any) => {
+      if (e.detail?.memberId === currentUser.memberId) {
+        alert('Your library membership account has been terminated by administration. You have been logged out immediately.');
+        logout();
+      }
+    };
+
+    window.addEventListener('hikmah_member_deleted', handleMemberDeleted);
+    window.addEventListener('storage', verifyMemberStatus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hikmah_member_deleted', handleMemberDeleted);
+      window.removeEventListener('storage', verifyMemberStatus);
+    };
   }, [currentUser]);
 
   const refreshProfile = async () => {

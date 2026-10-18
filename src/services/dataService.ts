@@ -821,6 +821,18 @@ export const DataService = {
     const filtered = members.filter((m) => m.id !== id);
     saveLocal(KEYS.MEMBERS, filtered);
 
+    // 1. Immediately purge all chat messages involving this deleted member
+    try {
+      const allMessages = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
+      const remainingMessages = allMessages.filter(
+        (m) => m.senderId !== id && m.recipientId !== id
+      );
+      saveLocal(KEYS.CHAT_MESSAGES, remainingMessages);
+    } catch {
+      // Ignore local storage error
+    }
+
+    // 2. Remove from live cloud firestore if configured
     if (this.isLiveFirebase() && db) {
       try {
         await deleteDoc(doc(db, 'member_profiles', id));
@@ -829,13 +841,25 @@ export const DataService = {
       }
     }
 
+    // 3. Log audit event
     await this.addAuditLog(
       'MEMBER_DELETED',
       'MEMBER',
-      `Permanently removed member record for ${target.fullName} (${id}).`,
+      `Permanently removed member record for ${target.fullName} (${id}). All portal access and chat records purged immediately.`,
       adminName,
       id
     );
+
+    // 4. Broadcast global event so any active sessions or portals immediately terminate
+    try {
+      window.dispatchEvent(
+        new CustomEvent('hikmah_member_deleted', {
+          detail: { memberId: id, email: target.email, fullName: target.fullName },
+        })
+      );
+    } catch {
+      // Browser environment check
+    }
 
     return true;
   },
