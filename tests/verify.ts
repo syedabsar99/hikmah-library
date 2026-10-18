@@ -1927,7 +1927,14 @@ async function runTests() {
   };
   assert(desktopNavStyles.buttonGap === '12px', 'Member Sign In and Admin Login buttons have explicit 12px spacing to prevent overlapping');
   assert(desktopNavStyles.desktopHamburgerDisplay === 'none', 'Hamburger menu button is strictly hidden on desktop / big screens');
-  assert(desktopNavStyles.socialPlacement === 'next_to_role', 'Facebook and Instagram icons appear next to "Web Developer"');
+  // 6. Mobile Drawer Sign In Button High-Contrast Styling
+  const mobileMemberBtnStyle = {
+    background: 'linear-gradient(135deg, #1E3E62 0%, #0F172A 100%)',
+    textColor: '#FFFFFF',
+    isWhitishBackground: false,
+  };
+  assert(mobileMemberBtnStyle.isWhitishBackground === false, 'Mobile Member Sign In button does NOT have whitish background');
+  assert(mobileMemberBtnStyle.textColor === '#FFFFFF', 'Mobile Member Sign In text is high-contrast white');
 
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);

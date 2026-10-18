@@ -222,7 +222,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                     borderColor: 'rgba(212,175,55,0.4)',
                   }}
                 >
-                  <User size={16} /> Member Sign In
+                  <User size={16} style={{ color: 'var(--accent-gold)' }} /> Member Sign In
                 </button>
                 <button
                   id="nav-admin-login-btn"
@@ -369,16 +369,39 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button
-                className="btn-outline"
+                id="mobile-nav-member-login-btn"
+                className="btn-primary"
                 onClick={() => handleNav('member-login')}
-                style={{ width: '100%', justifyContent: 'center', background: '#FFFFFF' }}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  background: 'linear-gradient(135deg, #1E3E62 0%, #0F172A 100%)',
+                  border: '1.5px solid rgba(212, 175, 55, 0.5)',
+                  color: '#FFFFFF',
+                  fontWeight: '700',
+                  fontSize: '0.94rem',
+                  padding: '12px 18px',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
               >
-                <User size={18} /> Member Sign In
+                <User size={18} style={{ color: 'var(--accent-gold)' }} />
+                <span>Member Sign In</span>
               </button>
               <button
+                id="mobile-nav-admin-login-btn"
                 className="btn-gold"
                 onClick={() => handleNav('admin-login')}
-                style={{ width: '100%', justifyContent: 'center' }}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  padding: '12px 18px',
+                  fontSize: '0.94rem',
+                  fontWeight: '700',
+                }}
               >
                 <Shield size={18} /> Admin Login
               </button>
