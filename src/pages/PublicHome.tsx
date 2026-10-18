@@ -1101,16 +1101,6 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                 All registered members must uphold these standards to preserve our peaceful study atmosphere.
               </p>
             </div>
-
-            {isAdmin && (
-              <button
-                className="btn-gold"
-                onClick={() => onNavigate('admin-dashboard')}
-                style={{ padding: '10px 20px', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                <Settings size={16} /> Manage Rules (Admin Console)
-              </button>
-            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '28px' }}>
