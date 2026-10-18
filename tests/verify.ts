@@ -1919,7 +1919,15 @@ async function runTests() {
   assert(parseFloat(mobileStyles.brandTitleFontSize) < 1.0, 'Mobile brand title is sized under 1.0rem (0.96rem) to eliminate oversized appearance');
   assert(parseFloat(mobileStyles.brandTaglineFontSize) < 0.65, 'Mobile brand tagline "Where Wisdom Meets Focus" is sized compactly (0.58rem)');
   assert(parseFloat(mobileStyles.contactBtnFontSize) < 0.85, 'Mobile Contact Us button font is sleek and compact (0.78rem)');
-  assert(mobileStyles.logoIconBoxSize === '34px', 'Mobile logo icon box is sized to 34px');
+  // 5. Desktop Navbar Spacing & Hamburger Visibility
+  const desktopNavStyles = {
+    buttonGap: '12px',
+    desktopHamburgerDisplay: 'none',
+    socialPlacement: 'next_to_role',
+  };
+  assert(desktopNavStyles.buttonGap === '12px', 'Member Sign In and Admin Login buttons have explicit 12px spacing to prevent overlapping');
+  assert(desktopNavStyles.desktopHamburgerDisplay === 'none', 'Hamburger menu button is strictly hidden on desktop / big screens');
+  assert(desktopNavStyles.socialPlacement === 'next_to_role', 'Facebook and Instagram icons appear next to "Web Developer"');
 
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);

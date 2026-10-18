@@ -183,21 +183,22 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <div className="footer-dev-tag">
                 System Architecture &amp; Full-Stack Development
               </div>
-              <div className="footer-dev-name" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <span>
-                  Designed &amp; Developed by{' '}
-                  <span
-                    style={{
-                      color: '#FACC15',
-                      fontWeight: '900',
-                      letterSpacing: '0.02em',
-                      textShadow: '0 0 16px rgba(250, 204, 21, 0.55), 0 0 3px #FACC15',
-                    }}
-                  >
-                    Syed Absar
-                  </span>
+              <div className="footer-dev-name">
+                Designed &amp; Developed by{' '}
+                <span
+                  style={{
+                    color: '#FACC15',
+                    fontWeight: '900',
+                    letterSpacing: '0.02em',
+                    textShadow: '0 0 16px rgba(250, 204, 21, 0.55), 0 0 3px #FACC15',
+                  }}
+                >
+                  Syed Absar
                 </span>
-                <span className="footer-dev-socials" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '2px' }}>
+              </div>
+              <div className="footer-dev-role" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '4px' }}>
+                <span>Web Developer</span>
+                <span className="footer-dev-socials" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                   <a
                     href="https://www.instagram.com/syednoorulabsar/"
                     target="_blank"
@@ -219,9 +220,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                     <FacebookIcon size={14} />
                   </a>
                 </span>
-              </div>
-              <div className="footer-dev-role">
-                Web Developer
               </div>
             </div>
           </div>

@@ -762,7 +762,17 @@ input, select, textarea {
 .nav-right-area {
   display: flex;
   align-items: center;
+  gap: 16px;
+}
+
+.nav-links-desktop {
+  display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+.mobile-menu-btn {
+  display: none !important;
 }
 
 .hero-wisdom-badge {

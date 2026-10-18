@@ -175,7 +175,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
           </div>
 
           {/* Desktop Nav Actions */}
-          <div className="nav-links-desktop">
+          <div className="nav-links-desktop" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {isAdmin && (
               <button
                 id="nav-admin-console-btn"
@@ -209,7 +209,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                 <LogOut size={16} /> Logout
               </button>
             ) : (
-              <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button
                   id="nav-member-login-btn"
                   className="btn-outline"
@@ -232,13 +232,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                 >
                   <Shield size={16} /> Admin Login
                 </button>
-              </>
+              </div>
             )}
           </div>
 
-          {/* Mobile Hamburger Toggle */}
+          {/* Mobile Hamburger Toggle - ONLY on mobile */}
           <button
             className="mobile-menu-btn"
+            style={{ display: 'none' }}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle Navigation"
           >
