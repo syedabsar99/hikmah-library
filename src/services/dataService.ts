@@ -637,8 +637,65 @@ export function calculateFeeStatus(dueDateStr?: string): { status: 'Paid' | 'Due
 
 export const DataService = {
   // Database Mode Information
+  // Cloud Firestore is activated only if explicitly enabled in environment variables.
+  // When false, instant zero-lag persistent local storage is used, preventing PERMISSION_DENIED hangs.
   isLiveFirebase(): boolean {
-    return isFirebaseConfigured();
+    return Boolean(
+      isFirebaseConfigured() &&
+      import.meta.env.VITE_ENABLE_FIRESTORE === 'true' &&
+      db
+    );
+  },
+
+  // Synchronous Local Storage Getters for Instant Zero-Flicker Initial Renders
+  getLocalMembersSync(): MemberProfile[] {
+    const list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+    return list.map((m) => {
+      const joiningDate = m.joiningDate || m.registrationDate || '2025-01-15';
+      const feeDueDate = m.feeDueDate || '2026-11-14';
+      const monthlyFee = m.monthlyFee || 1200;
+      const feeReminders = m.feeReminders || [];
+      const currentFeeStatus: FeeStatus = m.feeStatus || 'Paid';
+      const { status } = calculateFeeStatus(feeDueDate);
+      let calculatedStatus: FeeStatus = currentFeeStatus;
+      if (status === 'Overdue' && currentFeeStatus !== 'Overdue') {
+        calculatedStatus = 'Overdue';
+      } else if (status === 'Due' && currentFeeStatus === 'Paid') {
+        calculatedStatus = 'Due';
+      }
+
+      return {
+        ...m,
+        joiningDate,
+        feeDueDate,
+        monthlyFee,
+        feeReminders,
+        feeStatus: calculatedStatus,
+        registrationDate: m.registrationDate || joiningDate,
+        studyTarget: m.studyTarget || 'Self Study',
+        seatNumber: m.seatNumber || 'Unassigned',
+      };
+    });
+  },
+
+  getLocalWarningsSync(): WarningRecord[] {
+    return loadLocal<WarningRecord[]>(KEYS.WARNINGS, INITIAL_WARNINGS);
+  },
+
+  getLocalAnnouncementsSync(): Announcement[] {
+    return loadLocal<Announcement[]>(KEYS.ANNOUNCEMENTS, INITIAL_ANNOUNCEMENTS);
+  },
+
+  getLocalFacilitiesSync(): LibraryFacility[] {
+    return loadLocal<LibraryFacility[]>(KEYS.FACILITIES, INITIAL_FACILITIES);
+  },
+
+  getLocalRulesSync(): LibraryRule[] {
+    return loadLocal<LibraryRule[]>(KEYS.RULES, INITIAL_RULES);
+  },
+
+  getLocalCarouselPhotosSync(): CarouselPhoto[] {
+    return loadLocal<CarouselPhoto[]>(KEYS.CAROUSEL_PHOTOS, INITIAL_CAROUSEL_PHOTOS);
   },
 
   // ---------------- MEMBERSHIP OPERATIONS ----------------

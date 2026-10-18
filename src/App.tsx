@@ -25,21 +25,40 @@ const isResetPasswordRoute = (): boolean => {
   }
 };
 
+const resolveInitialView = (): string => {
+  if (isResetPasswordRoute()) {
+    return 'reset-password';
+  }
+  try {
+    const path = window.location.pathname.toLowerCase();
+    if (path.includes('/admin/login') || path.includes('/admin/dashboard') || path.endsWith('/admin') || path.includes('/admin/')) {
+      const savedAuth = sessionStorage.getItem('hikmah_auth_session_v2');
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        if (parsed.role === 'admin') return 'admin-dashboard';
+      }
+      return 'admin-login';
+    }
+    if (path.includes('/student') || path.includes('/member')) {
+      const savedAuth = sessionStorage.getItem('hikmah_auth_session_v2');
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        if (parsed.role === 'member') return 'member-portal';
+      }
+      return 'member-login';
+    }
+  } catch {}
+  return 'home';
+};
+
 const AppContent: React.FC = () => {
   const { isAdmin, isMember } = useAuth();
-  const [currentView, setCurrentView] = useState<string>(() => {
-    if (isResetPasswordRoute()) {
-      return 'reset-password';
-    }
-    return 'home';
-  });
+  const [currentView, setCurrentView] = useState<string>(() => resolveInitialView());
 
   // Listen for browser popstate or URL changes
   useEffect(() => {
     const handlePopState = () => {
-      if (isResetPasswordRoute()) {
-        setCurrentView('reset-password');
-      }
+      setCurrentView(resolveInitialView());
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -54,8 +73,14 @@ const AppContent: React.FC = () => {
         window.history.pushState(null, '', `${base}/`);
       } else if (view === 'admin-login') {
         window.history.pushState(null, '', `${base}/admin/login`);
+      } else if (view === 'admin-dashboard') {
+        window.history.pushState(null, '', `${base}/admin`);
       } else if (view === 'member-login') {
-        window.history.pushState(null, '', `${base}/member/login`);
+        window.history.pushState(null, '', `${base}/student/login`);
+      } else if (view === 'member-portal') {
+        window.history.pushState(null, '', `${base}/student/portal`);
+      } else if (view === 'reset-password') {
+        window.history.pushState(null, '', `${base}/reset-password`);
       }
     } catch {
       // fallback

@@ -45,7 +45,9 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
   // Member Datasets
   const [myWarnings, setMyWarnings] = useState<WarningRecord[]>([]);
-  const [availablePeers, setAvailablePeers] = useState<MemberProfile[]>([]);
+  const [availablePeers, setAvailablePeers] = useState<MemberProfile[]>(() =>
+    DataService.getLocalMembersSync().filter((m) => m.id !== currentUser?.memberId && m.membershipStatus === 'Active')
+  );
 
   // E2E Encrypted Chat State (Dedicated direct encrypted channel with Administration)
   const adminPeer: MemberProfile = {

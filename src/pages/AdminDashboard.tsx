@@ -110,13 +110,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
   const [showAdminResetModal, setShowAdminResetModal] = useState(false);
 
-  // Application Data States
-  const [members, setMembers] = useState<MemberProfile[]>([]);
-  const [warnings, setWarnings] = useState<WarningRecord[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [facilities, setFacilities] = useState<LibraryFacility[]>([]);
-  const [rules, setRules] = useState<LibraryRule[]>([]);
-  const [carouselPhotos, setCarouselPhotos] = useState<CarouselPhoto[]>([]);
+  // Application Data States (Initialized immediately from local storage for 0ms instant display)
+  const [members, setMembers] = useState<MemberProfile[]>(() => DataService.getLocalMembersSync());
+  const [warnings, setWarnings] = useState<WarningRecord[]>(() => DataService.getLocalWarningsSync());
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => DataService.getLocalAnnouncementsSync());
+  const [facilities, setFacilities] = useState<LibraryFacility[]>(() => DataService.getLocalFacilitiesSync());
+  const [rules, setRules] = useState<LibraryRule[]>(() => DataService.getLocalRulesSync());
+  const [carouselPhotos, setCarouselPhotos] = useState<CarouselPhoto[]>(() => DataService.getLocalCarouselPhotosSync());
 
   // Carousel Photos Management State (Max 8 Strictly Enforced)
   const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
