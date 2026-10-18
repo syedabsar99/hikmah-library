@@ -25,6 +25,7 @@ import {
 // Storage keys for persistent offline / local-first operation
 const KEYS = {
   MEMBERS: 'hikmah_members_v3',
+  DELETED_MEMBERS: 'hikmah_deleted_members_v2',
   ATTENDANCE: 'hikmah_attendance_v2',
   WARNINGS: 'hikmah_warnings_v2',
   ANNOUNCEMENTS: 'hikmah_announcements_v3',
@@ -676,13 +677,29 @@ export const DataService = {
 
   // Synchronous Local Storage Getters for Instant Zero-Flicker Initial Renders
   getLocalMembersSync(): MemberProfile[] {
-    const list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+    const deletedSet = new Set(deletedList.map((s) => (s || '').toLowerCase().trim()));
+
+    let list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+
+    // Filter out any members that were deleted
+    list = list.filter((m) => {
+      const id = (m.id || '').toLowerCase().trim();
+      const email = (m.email || '').toLowerCase().trim();
+      return !deletedSet.has(id) && !deletedSet.has(email);
+    });
     
-    // Automatically merge any newly added seed members (e.g. syedabsemia@gmail.com) into cached array
+    // Automatically merge any newly added seed members UNLESS they were deleted by the admin!
     const existingEmails = new Set(list.map((m) => (m.email || '').toLowerCase().trim()));
+    const existingIds = new Set(list.map((m) => (m.id || '').toLowerCase().trim()));
     let hasNewSeed = false;
     for (const seed of INITIAL_MEMBERS) {
-      if (!existingEmails.has((seed.email || '').toLowerCase().trim())) {
+      const seedEmail = (seed.email || '').toLowerCase().trim();
+      const seedId = (seed.id || '').toLowerCase().trim();
+      if (deletedSet.has(seedEmail) || deletedSet.has(seedId)) {
+        continue;
+      }
+      if (!existingEmails.has(seedEmail) && !existingIds.has(seedId)) {
         list.push(seed);
         hasNewSeed = true;
       }
@@ -746,6 +763,8 @@ export const DataService = {
     }
     try {
       let cloudList: MemberProfile[] | null = null;
+      let cloudDeletedIds: string[] = [];
+
       // 1. Try internal /api/members first
       try {
         const res = await fetch('/api/members', {
@@ -753,8 +772,11 @@ export const DataService = {
         });
         if (res.ok) {
           const json = await res.json();
-          if (json.success && Array.isArray(json.members) && json.members.length > 0) {
+          if (json.success && Array.isArray(json.members)) {
             cloudList = json.members;
+          }
+          if (json.success && Array.isArray(json.deletedIds)) {
+            cloudDeletedIds = json.deletedIds;
           }
         }
       } catch {}
@@ -765,22 +787,53 @@ export const DataService = {
           const res = await fetch(`https://xuljvukumnyhzztx.public.blob.vercel-storage.com/members.json?t=${Date.now()}`);
           if (res.ok) {
             const json = await res.json();
-            if (Array.isArray(json) && json.length > 0) {
+            if (Array.isArray(json)) {
               cloudList = json;
             }
           }
         } catch {}
       }
 
-      if (cloudList && cloudList.length > 0) {
+      // Merge local and cloud deleted records
+      const localDeleted = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+      const allDeletedSet = new Set<string>([
+        ...localDeleted.map((s) => (s || '').toLowerCase().trim()),
+        ...cloudDeletedIds.map((s) => (s || '').toLowerCase().trim()),
+      ]);
+      saveLocal(KEYS.DELETED_MEMBERS, Array.from(allDeletedSet));
+
+      if (cloudList) {
         const localList = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
         const mergedMap = new Map<string, MemberProfile>();
-        // Add initial members first
-        INITIAL_MEMBERS.forEach((m) => mergedMap.set((m.email || '').toLowerCase().trim(), m));
-        // Add local members
-        localList.forEach((m) => mergedMap.set((m.email || '').toLowerCase().trim(), m));
-        // Merge cloud members
-        cloudList.forEach((m) => mergedMap.set((m.email || '').toLowerCase().trim(), m));
+
+        // Add initial members (skipping deleted)
+        INITIAL_MEMBERS.forEach((m) => {
+          const id = (m.id || '').toLowerCase().trim();
+          const email = (m.email || '').toLowerCase().trim();
+          if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
+            mergedMap.set(email, m);
+          }
+        });
+
+        // Add local members (skipping deleted)
+        localList.forEach((m) => {
+          const id = (m.id || '').toLowerCase().trim();
+          const email = (m.email || '').toLowerCase().trim();
+          if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
+            mergedMap.set(email, m);
+          }
+        });
+
+        // Merge cloud members (authoritative, skipping deleted)
+        cloudList.forEach((m) => {
+          const id = (m.id || '').toLowerCase().trim();
+          const email = (m.email || '').toLowerCase().trim();
+          if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
+            mergedMap.set(email, m);
+          } else {
+            mergedMap.delete(email);
+          }
+        });
 
         const mergedArray = Array.from(mergedMap.values());
         saveLocal(KEYS.MEMBERS, mergedArray);
@@ -795,10 +848,11 @@ export const DataService = {
   async pushMembersToCloud(members: MemberProfile[]): Promise<void> {
     try {
       if (typeof window === 'undefined' || !window.location || typeof fetch === 'undefined') return;
+      const deletedIds = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
       await fetch('/api/members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ members }),
+        body: JSON.stringify({ action: 'save_all', members, deletedIds }),
       });
     } catch (e) {
       console.warn('Failed to push members to cloud:', e);
@@ -899,6 +953,17 @@ export const DataService = {
 
     const updated = [...members, newMember];
     saveLocal(KEYS.MEMBERS, updated);
+
+    // Clear from deleted list if re-added
+    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+    const cleanEmail = (member.email || '').toLowerCase().trim();
+    const cleanId = newId.toLowerCase().trim();
+    const filteredDeleted = deletedList.filter((s) => {
+      const clean = (s || '').toLowerCase().trim();
+      return clean !== cleanEmail && clean !== cleanId;
+    });
+    saveLocal(KEYS.DELETED_MEMBERS, filteredDeleted);
+
     this.pushMembersToCloud(updated);
 
     if (this.isLiveFirebase() && db) {
@@ -987,48 +1052,81 @@ export const DataService = {
   },
 
   async deleteMember(id: string, adminName: string): Promise<boolean> {
+    const cleanId = (id || '').trim();
     const members = await this.getMembers();
-    const target = members.find((m) => m.id === id);
+    const target = members.find((m) => m.id === cleanId || (m.uid && m.uid === cleanId));
     if (!target) return false;
 
-    const filtered = members.filter((m) => m.id !== id);
-    saveLocal(KEYS.MEMBERS, filtered);
-    this.pushMembersToCloud(filtered);
+    const targetId = (target.id || '').trim();
+    const targetEmail = (target.email || '').toLowerCase().trim();
 
-    // 1. Immediately purge all chat messages involving this deleted member
+    // 1. Permanently record in deleted tracking list so it NEVER revives
+    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+    const newDeletedSet = new Set<string>(deletedList.map((s) => (s || '').toLowerCase().trim()));
+    if (targetId) newDeletedSet.add(targetId.toLowerCase());
+    if (targetEmail) newDeletedSet.add(targetEmail);
+    const updatedDeletedList = Array.from(newDeletedSet);
+    saveLocal(KEYS.DELETED_MEMBERS, updatedDeletedList);
+
+    // 2. Remove from local members list immediately
+    const filtered = members.filter((m) => {
+      const mId = (m.id || '').toLowerCase().trim();
+      const mEmail = (m.email || '').toLowerCase().trim();
+      return mId !== targetId.toLowerCase() && mEmail !== targetEmail;
+    });
+    saveLocal(KEYS.MEMBERS, filtered);
+
+    // 3. Delete from live cloud storage (Vercel Blob) immediately
+    try {
+      if (typeof window !== 'undefined' && window.location && typeof fetch !== 'undefined') {
+        await fetch('/api/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete',
+            id: targetId,
+            email: targetEmail,
+          }),
+        });
+      }
+    } catch (cloudErr) {
+      console.warn('Cloud delete error:', cloudErr);
+    }
+
+    // 4. Immediately purge all chat messages involving this deleted member
     try {
       const allMessages = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
       const remainingMessages = allMessages.filter(
-        (m) => m.senderId !== id && m.recipientId !== id
+        (m) => m.senderId !== targetId && m.recipientId !== targetId
       );
       saveLocal(KEYS.CHAT_MESSAGES, remainingMessages);
     } catch {
       // Ignore local storage error
     }
 
-    // 2. Remove from live cloud firestore if configured
+    // 5. Remove from live cloud firestore if configured
     if (this.isLiveFirebase() && db) {
       try {
-        await deleteDoc(doc(db, 'member_profiles', id));
+        await deleteDoc(doc(db, 'member_profiles', targetId));
       } catch (err) {
         console.warn('Firebase deleteMember sync error:', err);
       }
     }
 
-    // 3. Log audit event
+    // 6. Log audit event
     await this.addAuditLog(
       'MEMBER_DELETED',
       'MEMBER',
-      `Permanently removed member record for ${target.fullName} (${id}). All portal access and chat records purged immediately.`,
+      `Permanently removed member record for ${target.fullName} (${targetId}). All portal access and chat records purged immediately.`,
       adminName,
-      id
+      targetId
     );
 
-    // 4. Broadcast global event so any active sessions or portals immediately terminate
+    // 7. Broadcast global event so any active sessions or portals immediately terminate
     try {
       window.dispatchEvent(
         new CustomEvent('hikmah_member_deleted', {
-          detail: { memberId: id, email: target.email, fullName: target.fullName },
+          detail: { memberId: targetId, email: targetEmail, fullName: target.fullName },
         })
       );
     } catch {
@@ -1184,6 +1282,14 @@ export const DataService = {
   async getMemberByEmail(email: string): Promise<MemberProfile | undefined> {
     const cleanTarget = (email || '').trim().toLowerCase();
     if (!cleanTarget) return undefined;
+
+    // If marked deleted, never return them
+    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+    const deletedSet = new Set(deletedList.map((s) => (s || '').toLowerCase().trim()));
+    if (deletedSet.has(cleanTarget)) {
+      return undefined;
+    }
+
     const members = await this.getMembers();
     let found = members.find((m) => {
       const memberEmail = (m.email || '').trim().toLowerCase();
@@ -1212,8 +1318,14 @@ export const DataService = {
       } catch {}
     }
 
-    // Direct fallback to INITIAL_MEMBERS
-    found = INITIAL_MEMBERS.find((m) => (m.email || '').trim().toLowerCase() === cleanTarget);
+    // Direct fallback to INITIAL_MEMBERS (only if not deleted)
+    if (!deletedSet.has(cleanTarget)) {
+      found = INITIAL_MEMBERS.find((m) => {
+        const mEmail = (m.email || '').trim().toLowerCase();
+        const mId = (m.id || '').trim().toLowerCase();
+        return (mEmail === cleanTarget || mId === cleanTarget) && !deletedSet.has(mEmail) && !deletedSet.has(mId);
+      });
+    }
     return found;
   },
 

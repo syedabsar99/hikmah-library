@@ -2162,6 +2162,25 @@ async function runTests() {
   assert(checkPassword(foundSelfReg?.passcode, 'SelfPass@999') === true, 'Self-registered student successfully logs in with registered password');
   assert(checkPassword(foundSelfReg?.passcode, 'WrongPass123') === false, 'Self-registered student login fails with wrong password');
 
+  // Test 6: Permanent Member Deletion & Resurrection Prevention
+  const memberToDeleteId = addedStudent.id;
+  const memberDeleteResult = await DataService.deleteMember(memberToDeleteId, 'Chief Librarian');
+  assert(memberDeleteResult === true, 'Member deletion operation succeeds');
+
+  const afterDeleteMembers = await DataService.getMembers();
+  const deletedMemberInList = afterDeleteMembers.find((m) => m.id === memberToDeleteId || m.email === fakeStudentEmail);
+  assert(deletedMemberInList === undefined, 'Deleted member is immediately absent from getMembers()');
+
+  const lookupAfterDelete = await DataService.getMemberByEmail(fakeStudentEmail);
+  assert(lookupAfterDelete === undefined, 'getMemberByEmail returns undefined for deleted member');
+
+  // Verify that calling getLocalMembersSync() multiple times NEVER revives the deleted member
+  const syncMembers1 = DataService.getLocalMembersSync();
+  assert(syncMembers1.find((m) => m.id === memberToDeleteId) === undefined, 'getLocalMembersSync does NOT revive deleted member');
+
+  const syncMembers2 = await DataService.getMembers();
+  assert(syncMembers2.find((m) => m.id === memberToDeleteId) === undefined, 'Subsequent getMembers call maintains permanent deletion');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');
