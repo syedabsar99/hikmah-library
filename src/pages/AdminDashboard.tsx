@@ -41,7 +41,6 @@ import {
   EyeOff,
   CheckCircle2,
   Camera,
-  Send,
   Copy,
   Check,
 } from 'lucide-react';
@@ -262,6 +261,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     sent: boolean;
     selected: boolean;
   }[] | null>(null);
+  const [currentWaIndex, setCurrentWaIndex] = useState(0);
   const [copyBroadcastSuccess, setCopyBroadcastSuccess] = useState(false);
 
   // Administrative Authority Handover State (with Email Verification Code & Link)
@@ -797,25 +797,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     return `*HIKMAH LIBRARY & STUDY LOUNGE*\n*Monthly Fee Renewal & Expiry Notice*\n\nAssalamu Alaikum Respected Members,\n\nThis is an official fee reminder regarding your monthly study desk maintenance at Hikmah Library. Kindly clear your dues to keep your allocated seat reservation active.\n\n*Pending Dues Summary:*\n${listLines}\n\n*Payment Modes:*\n• Library Front Desk\n• Direct UPI Transfer\n\nThank you,\nHikmah Library Administration\nHelpline: ${displayAdminPhone}`;
   };
 
-  const handleOpenWhatsAppBroadcast = async () => {
-    const overdueList = members.filter(
-      (m) => m.feeStatus === 'Overdue' || m.feeStatus === 'Due'
-    );
-    if (overdueList.length === 0) {
-      alert('✓ All student memberships have active, settled fees! No overdue reminders need to be dispatched.');
-      return;
-    }
-
-    // 1. Record daily reminder in student portals
-    await DataService.sendDailyRemindersToAllOverdue('Chief Librarian');
-    await loadData();
-
-    // 2. Open WhatsApp multi-contact share
-    const broadcastMsg = generateBroadcastText(overdueList);
-    const waBroadcastUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(broadcastMsg)}`;
-    window.open(waBroadcastUrl, '_blank');
-  };
-
   const handleSendBatchFeeReminders = async () => {
     // 1. Filter overdue/due students only - students who already paid are strictly excluded
     const overdueMembers = members.filter(
@@ -831,7 +812,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     await DataService.sendDailyRemindersToAllOverdue('Chief Librarian');
     await loadData();
 
-    // 3. Prepare WhatsApp links for each student with ALL numbers pre-selected
+    // 3. Prepare direct WhatsApp links for each student using their registered phone number
     const queue = overdueMembers.map((m) => {
       const rawPhone = m.phoneNumber || '';
       const digits = rawPhone.replace(/[^0-9]/g, '');
@@ -854,53 +835,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       };
     });
 
-    // 4. Set queue modal with all numbers automatically selected
+    // 4. Open the FIRST student's WhatsApp chat immediately with their number already selected
+    if (queue[0]?.waUrl) {
+      window.open(queue[0].waUrl, '_blank');
+      queue[0].sent = true;
+    }
+    setCurrentWaIndex(0);
     setWaBatchQueue(queue);
+  };
 
-    // 5. Automatically launch WhatsApp chats for ALL overdue students without requiring manual row clicks
-    const validRecipients = queue.filter((q) => q.waUrl);
-    if (validRecipients.length > 0) {
-      validRecipients.forEach((item, index) => {
+  const handleOpenNextStudentChat = () => {
+    if (!waBatchQueue) return;
+    const nextIdx = currentWaIndex + 1;
+    if (nextIdx < waBatchQueue.length) {
+      const target = waBatchQueue[nextIdx];
+      if (target.waUrl) {
+        window.open(target.waUrl, '_blank');
+      }
+      setWaBatchQueue((prev) =>
+        prev ? prev.map((q, i) => (i === nextIdx ? { ...q, sent: true } : q)) : null
+      );
+      setCurrentWaIndex(nextIdx);
+    }
+  };
+
+  const handleOpenAllChatsInTabs = () => {
+    if (!waBatchQueue) return;
+    waBatchQueue.forEach((item, index) => {
+      if (item.waUrl) {
         setTimeout(() => {
           window.open(item.waUrl, '_blank');
           setWaBatchQueue((prev) =>
             prev ? prev.map((q) => (q.member.id === item.member.id ? { ...q, sent: true } : q)) : null
           );
-        }, index * 650);
-      });
-    }
-  };
-
-  const handleOpenAllSelectedChats = () => {
-    if (!waBatchQueue) return;
-    const selected = waBatchQueue.filter((q) => q.selected && q.waUrl);
-    selected.forEach((item, index) => {
-      setTimeout(() => {
-        window.open(item.waUrl, '_blank');
-        setWaBatchQueue((prev) =>
-          prev ? prev.map((q) => (q.member.id === item.member.id ? { ...q, sent: true } : q)) : null
-        );
-      }, index * 350);
+        }, index * 400);
+      }
     });
-  };
-
-  const handleOpenModalBroadcast = () => {
-    if (!waBatchQueue) return;
-    const selectedMembers = waBatchQueue.filter((q) => q.selected).map((q) => q.member);
-    if (selectedMembers.length === 0) {
-      alert('Please select at least one overdue student.');
-      return;
-    }
-    const broadcastMsg = generateBroadcastText(selectedMembers);
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(broadcastMsg)}`, '_blank');
   };
 
   const handleCopyBroadcastText = () => {
     if (!waBatchQueue) return;
-    const selectedMembers = waBatchQueue.filter((q) => q.selected).map((q) => q.member);
-    const broadcastMsg = generateBroadcastText(
-      selectedMembers.length > 0 ? selectedMembers : waBatchQueue.map((q) => q.member)
-    );
+    const broadcastMsg = generateBroadcastText(waBatchQueue.map((q) => q.member));
     navigator.clipboard.writeText(broadcastMsg);
     setCopyBroadcastSuccess(true);
     setTimeout(() => setCopyBroadcastSuccess(false), 2500);
@@ -1927,7 +1902,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   id="admin-batch-reminders-btn"
                   className="btn-gold"
@@ -1937,18 +1912,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 >
                   <Bell size={16} /> Dispatch Daily Reminders to All Overdue ({overdueMembers.length})
                 </button>
-
-                {overdueMembers.length > 0 && (
-                  <button
-                    id="admin-broadcast-reminders-btn"
-                    className="btn-success"
-                    onClick={handleOpenWhatsAppBroadcast}
-                    style={{ padding: '8px 18px', fontSize: '0.88rem', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                    title="Send a consolidated reminder notice to all overdue students via WhatsApp Multi-Contact Broadcast"
-                  >
-                    <Send size={16} /> 1-Click WhatsApp Broadcast ({overdueMembers.length})
-                  </button>
-                )}
               </div>
             </div>
 
@@ -4240,10 +4203,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', margin: 0, fontWeight: '800' }}>
-                    Automated Fee Reminders Dispatched
+                    Direct WhatsApp Fee Reminder Dispatcher
                   </h3>
                   <p style={{ margin: 0, color: '#34D399', fontSize: '0.82rem', fontWeight: '600' }}>
-                    ✓ All {waBatchQueue.length} overdue student(s) automatically selected &amp; recorded in portals
+                    ✓ All {waBatchQueue.length} student phone numbers loaded from database. Each student's chat opens directly.
                   </p>
                 </div>
               </div>
@@ -4263,53 +4226,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               </button>
             </div>
 
-            {/* Quick Multi-Action Strip */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                gap: '10px',
-                marginBottom: '16px',
-                padding: '14px',
-                background: 'rgba(212, 175, 55, 0.06)',
-                border: '1px solid rgba(212, 175, 55, 0.2)',
-                borderRadius: 'var(--radius-md)',
-              }}
-            >
-              <button
-                type="button"
-                className="btn-gold"
-                onClick={handleOpenAllSelectedChats}
+            {/* Next Student Action Card */}
+            {currentWaIndex + 1 < waBatchQueue.length ? (
+              <div
                 style={{
-                  fontSize: '0.8rem',
-                  fontWeight: '700',
-                  padding: '9px 12px',
-                  display: 'inline-flex',
+                  padding: '16px 20px',
+                  background: 'rgba(212, 175, 55, 0.1)',
+                  border: '1px solid rgba(212, 175, 55, 0.3)',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: '18px',
+                  display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
+                  justifyContent: 'space-between',
+                  gap: '14px',
+                  flexWrap: 'wrap',
                 }}
-                title="Open WhatsApp chat tabs for all selected overdue students"
               >
-                <RefreshCw size={14} /> Auto-Open All Chats ({waBatchQueue.filter((q) => q.selected && q.waUrl).length})
-              </button>
+                <div>
+                  <div style={{ fontSize: '0.74rem', color: '#FBBF24', fontWeight: '800', letterSpacing: '0.05em' }}>
+                    NEXT OVERDUE STUDENT IN QUEUE ({currentWaIndex + 2} of {waBatchQueue.length})
+                  </div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#FFFFFF', marginTop: '2px' }}>
+                    {waBatchQueue[currentWaIndex + 1].member.fullName} ({waBatchQueue[currentWaIndex + 1].phone})
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Desk Fee: ₹{waBatchQueue[currentWaIndex + 1].member.monthlyFee || 1200} • Due: {waBatchQueue[currentWaIndex + 1].member.feeDueDate || 'Overdue'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-gold"
+                  onClick={handleOpenNextStudentChat}
+                  style={{ padding: '10px 22px', fontSize: '0.9rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                >
+                  Open Next Chat ({currentWaIndex + 2}/{waBatchQueue.length}) ➔
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: '14px 18px',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: '18px',
+                  color: '#34D399',
+                  fontWeight: '700',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <CheckCircle2 size={18} /> All {waBatchQueue.length} overdue students' direct WhatsApp chats have been launched! Press "Send" in WhatsApp.
+              </div>
+            )}
 
+            {/* Quick Utility Strip */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
               <button
                 type="button"
-                className="btn-success"
-                onClick={handleOpenModalBroadcast}
+                className="btn-outline"
+                onClick={handleOpenAllChatsInTabs}
                 style={{
                   fontSize: '0.8rem',
                   fontWeight: '700',
-                  padding: '9px 12px',
+                  padding: '8px 14px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
                   gap: '6px',
                 }}
-                title="Open WhatsApp contact selector with prefilled consolidated fee reminder to send to all at once"
+                title="Open all overdue students' chats in separate browser tabs"
               >
-                <Send size={14} /> 1-Click Broadcast
+                📑 Re-Open All Tabs at Once
               </button>
 
               <button
@@ -4319,21 +4308,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 style={{
                   fontSize: '0.8rem',
                   fontWeight: '700',
-                  padding: '9px 12px',
+                  padding: '8px 14px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
                   gap: '6px',
                   borderColor: 'rgba(255, 255, 255, 0.15)',
                 }}
                 title="Copy formatted reminder message to clipboard"
               >
                 {copyBroadcastSuccess ? <Check size={14} color="#34D399" /> : <Copy size={14} />}
-                {copyBroadcastSuccess ? 'Copied Notice!' : 'Copy Notice'}
+                {copyBroadcastSuccess ? 'Copied Notice!' : 'Copy Fee Notice'}
               </button>
             </div>
 
-            {/* Browser popup hint */}
+            {/* Direct Send Explanatory Tip */}
             <div
               style={{
                 fontSize: '0.78rem',
@@ -4346,44 +4334,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 border: '1px solid var(--border-subtle)',
               }}
             >
-              💡 <strong style={{ color: '#FBBF24' }}>Automated Dispatch Active:</strong> WhatsApp tabs are triggered automatically. If your browser paused multiple tabs, click <strong style={{ color: '#FFFFFF' }}>"Auto-Open All Chats"</strong> or use <strong style={{ color: '#34D399' }}>"1-Click Broadcast"</strong> to send to everyone in one WhatsApp window!
-            </div>
-
-            {/* Select All Row */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 12px',
-                background: 'rgba(255, 255, 255, 0.02)',
-                borderRadius: 'var(--radius-sm)',
-                marginBottom: '10px',
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: '#FFFFFF', fontWeight: '700' }}>
-                <input
-                  type="checkbox"
-                  checked={waBatchQueue.length > 0 && waBatchQueue.every((q) => q.selected)}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setWaBatchQueue((prev) =>
-                      prev ? prev.map((q) => ({ ...q, selected: checked })) : null
-                    );
-                  }}
-                  style={{ width: '16px', height: '16px', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
-                />
-                All Overdue Numbers Selected ({waBatchQueue.filter((q) => q.selected).length}/{waBatchQueue.length})
-              </label>
-
-              <span style={{ fontSize: '0.78rem', color: '#34D399', fontWeight: '700' }}>
-                {waBatchQueue.filter((q) => q.sent).length} of {waBatchQueue.length} Tabs Opened
-              </span>
+              💡 <strong style={{ color: '#34D399' }}>Zero Manual Contact Selection:</strong> Each student's phone number and personalized fee amount are pre-filled directly into WhatsApp. You only have to press <strong style={{ color: '#FFFFFF' }}>Send</strong> (or hit Enter) in WhatsApp!
             </div>
 
             {/* Student Queue Rows */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '300px', overflowY: 'auto', marginBottom: '22px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '280px', overflowY: 'auto', marginBottom: '22px' }}>
               {waBatchQueue.map((item, idx) => (
                 <div
                   key={item.member.id}
@@ -4397,26 +4352,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                     borderRadius: 'var(--radius-md)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <input
-                      type="checkbox"
-                      checked={item.selected}
-                      onChange={() => {
-                        setWaBatchQueue((prev) =>
-                          prev
-                            ? prev.map((q, i) => (i === idx ? { ...q, selected: !q.selected } : q))
-                            : null
-                        );
-                      }}
-                      style={{ width: '16px', height: '16px', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: '700', fontSize: '0.92rem', color: '#FFFFFF' }}>
-                        {item.member.fullName}
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                        Fee: ₹{item.member.monthlyFee || 1200} • Due: {item.member.feeDueDate || 'Overdue'} • Phone: {item.phone || 'No phone'}
-                      </div>
+                  <div>
+                    <div style={{ fontWeight: '700', fontSize: '0.92rem', color: '#FFFFFF' }}>
+                      #{idx + 1}. {item.member.fullName}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      Fee: ₹{item.member.monthlyFee || 1200} • Due: {item.member.feeDueDate || 'Overdue'} • Phone: <strong style={{ color: '#93C5FD' }}>{item.phone || 'No phone'}</strong>
                     </div>
                   </div>
 
@@ -4449,6 +4390,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                               ? prev.map((q, i) => (i === idx ? { ...q, sent: true } : q))
                               : null
                           );
+                          setCurrentWaIndex(idx);
                         }}
                         style={{ padding: '6px 12px', fontSize: '0.78rem', fontWeight: '700' }}
                       >
