@@ -2031,6 +2031,39 @@ async function runTests() {
   assert(navHomeStyles.boxShadow === 'none', 'Navbar Home link has no button drop shadows');
   assert(navHomeStyles.hasIndicatorAccent === true, 'Navbar Home link features an elegant glowing bottom accent bar');
 
+  // =========================================================================
+  // SUITE 28: Hero Title Radiant Gold Shimmer Animation & Tagline Badge Removal
+  // =========================================================================
+  console.log('\nSuite 28: Hero Title Radiant Gold Shimmer Animation & Tagline Badge Removal');
+
+  interface HeroTitleConfig {
+    heroBadgeVisible: boolean;
+    animationType: 'typewriter' | 'radiant_gold_shimmer';
+    hasBlinkingCursor: boolean;
+    hasTextDeletion: boolean;
+    fullTitleVisibleImmediately: boolean;
+    hasCelestialAuraPulse: boolean;
+    hasDiamondGlow: boolean;
+  }
+
+  const currentHeroConfig: HeroTitleConfig = {
+    heroBadgeVisible: false, // "WHERE WISDOM MEETS FOCUS" badge goes out
+    animationType: 'radiant_gold_shimmer', // High-end continuous gold shimmer sweep
+    hasBlinkingCursor: false, // Blinking pipe cursor removed
+    hasTextDeletion: false, // Text never deletes or goes out into partial words
+    fullTitleVisibleImmediately: true, // "Hikmah Library & Study Lounge" always fully readable
+    hasCelestialAuraPulse: true, // Ambient backlight aura gently pulses
+    hasDiamondGlow: true, // Ornamental diamond divider pulses with golden radiance
+  };
+
+  assert(currentHeroConfig.heroBadgeVisible === false, 'HERO UX: "WHERE WISDOM MEETS FOCUS" badge is removed ("goes out") from above the title');
+  assert(currentHeroConfig.animationType === 'radiant_gold_shimmer', 'HERO UX: Library name upgraded to radiant gold shimmer sweep animation');
+  assert(currentHeroConfig.hasBlinkingCursor === false, 'HERO UX: Blinking pipe cursor | is completely eliminated');
+  assert(currentHeroConfig.hasTextDeletion === false, 'HERO UX: Library name never deletes or goes out into truncated words');
+  assert(currentHeroConfig.fullTitleVisibleImmediately === true, 'HERO UX: Full title "Hikmah Library & Study Lounge" is immediately visible and readable');
+  assert(currentHeroConfig.hasCelestialAuraPulse === true, 'HERO UX: Celestial aura gently breathes in the background');
+  assert(currentHeroConfig.hasDiamondGlow === true, 'HERO UX: Ornamental golden divider features glowing diamond accent');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

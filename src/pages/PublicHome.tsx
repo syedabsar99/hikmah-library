@@ -179,33 +179,6 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
     }
   };
 
-  // Typewriter animation for library name in hero
-  const fullHeroTitle = 'Hikmah Library & Study Lounge';
-  const [typedTitleCount, setTypedTitleCount] = useState(0);
-  const [isDeletingTitle, setIsDeletingTitle] = useState(false);
-
-  useEffect(() => {
-    let timeout: any;
-    if (!isDeletingTitle && typedTitleCount < fullHeroTitle.length) {
-      timeout = setTimeout(() => {
-        setTypedTitleCount((prev) => prev + 1);
-      }, 70);
-    } else if (!isDeletingTitle && typedTitleCount === fullHeroTitle.length) {
-      timeout = setTimeout(() => {
-        setIsDeletingTitle(true);
-      }, 4200);
-    } else if (isDeletingTitle && typedTitleCount > 0) {
-      timeout = setTimeout(() => {
-        setTypedTitleCount((prev) => prev - 1);
-      }, 35);
-    } else if (isDeletingTitle && typedTitleCount === 0) {
-      timeout = setTimeout(() => {
-        setIsDeletingTitle(false);
-      }, 600);
-    }
-    return () => clearTimeout(timeout);
-  }, [typedTitleCount, isDeletingTitle, fullHeroTitle.length]);
-
   // Auto-moving picture carousel (runs continuously every 4 seconds, pauses on hover)
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -257,26 +230,12 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
       >
         <div className="container" style={{ position: 'relative', zIndex: 2 }}>
           <div style={{ maxWidth: '920px', margin: '0 auto', textAlign: 'center' }}>
-            {/* Tagline Badge */}
-            <div className="hero-wisdom-badge">
-              <Sparkles size={16} color="var(--accent-gold)" /> WHERE WISDOM MEETS FOCUS
-            </div>
-
-            {/* PRESTIGE ANIMATED HERO TITLE WITH TYPEWRITER ANIMATION & GLOW ORB */}
+            {/* PRESTIGE ANIMATED HERO TITLE WITH RADIANT GOLD SHIMMER & CELESTIAL GLOW */}
             <div className="hero-title-container">
               <div className="hero-title-glow-orb" />
               <h1 className="hero-title-epic" aria-label="Hikmah Library & Study Lounge">
-                {typedTitleCount <= 16 ? (
-                  <span>{fullHeroTitle.slice(0, typedTitleCount)}</span>
-                ) : (
-                  <>
-                    <span>{fullHeroTitle.slice(0, 16)}</span>
-                    <span className="hero-title-gold-accent">
-                      {fullHeroTitle.slice(16, typedTitleCount)}
-                    </span>
-                  </>
-                )}
-                <span className="hero-typewriter-cursor">|</span>
+                <span className="hero-title-white">Hikmah Library </span>
+                <span className="hero-title-gold-accent">&amp; Study Lounge</span>
               </h1>
               {/* Golden Ornamental Divider */}
               <div className="hero-title-ornament">
