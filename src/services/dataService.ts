@@ -172,6 +172,27 @@ const INITIAL_MEMBERS: MemberProfile[] = [
     feeReminders: [],
     notes: 'Registered premium student member with dedicated cabin access.',
   },
+  {
+    id: 'HIK-2025-007',
+    uid: 'mem-uid-007',
+    fullName: 'Syed Absemia',
+    email: 'syedabsemia@gmail.com',
+    phoneNumber: '+91 96224 97807',
+    registrationDate: '2026-10-18',
+    joiningDate: '2026-10-18',
+    membershipStatus: 'Active',
+    batch: '24/7 Dedicated Access (No Shifts)',
+    studyTarget: 'Competitive Exams / Higher Studies',
+    seatNumber: 'Desk B-12',
+    warningCount: 0,
+    feeDueDate: '2026-11-18',
+    feeStatus: 'Paid',
+    monthlyFee: 1200,
+    lastPaidDate: '2026-10-18',
+    feeReminders: [],
+    passcode: 'Absar@12345',
+    notes: 'Registered student member with active 24/7 library access.',
+  },
 ];
 
 const INITIAL_WARNINGS: WarningRecord[] = [
@@ -640,9 +661,15 @@ export const DataService = {
   // Cloud Firestore is activated only if explicitly enabled in environment variables.
   // When false, instant zero-lag persistent local storage is used, preventing PERMISSION_DENIED hangs.
   isLiveFirebase(): boolean {
+    let enableFirestore = false;
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta.env) {
+        enableFirestore = import.meta.env.VITE_ENABLE_FIRESTORE === 'true';
+      }
+    } catch {}
     return Boolean(
       isFirebaseConfigured() &&
-      import.meta.env.VITE_ENABLE_FIRESTORE === 'true' &&
+      enableFirestore &&
       db
     );
   },
@@ -650,6 +677,20 @@ export const DataService = {
   // Synchronous Local Storage Getters for Instant Zero-Flicker Initial Renders
   getLocalMembersSync(): MemberProfile[] {
     const list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+    
+    // Automatically merge any newly added seed members (e.g. syedabsemia@gmail.com) into cached array
+    const existingEmails = new Set(list.map((m) => (m.email || '').toLowerCase().trim()));
+    let hasNewSeed = false;
+    for (const seed of INITIAL_MEMBERS) {
+      if (!existingEmails.has((seed.email || '').toLowerCase().trim())) {
+        list.push(seed);
+        hasNewSeed = true;
+      }
+    }
+    if (hasNewSeed) {
+      saveLocal(KEYS.MEMBERS, list);
+    }
+
     return list.map((m) => {
       const joiningDate = m.joiningDate || m.registrationDate || '2025-01-15';
       const feeDueDate = m.feeDueDate || '2026-11-14';
@@ -698,6 +739,72 @@ export const DataService = {
     return loadLocal<CarouselPhoto[]>(KEYS.CAROUSEL_PHOTOS, INITIAL_CAROUSEL_PHOTOS);
   },
 
+  // Cloud Synchronization for Multi-Device Student & Member Directory Consistency
+  async syncCloudMembers(): Promise<MemberProfile[]> {
+    if (typeof window === 'undefined' || !window.location || typeof fetch === 'undefined') {
+      return this.getLocalMembersSync();
+    }
+    try {
+      let cloudList: MemberProfile[] | null = null;
+      // 1. Try internal /api/members first
+      try {
+        const res = await fetch('/api/members', {
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.members) && json.members.length > 0) {
+            cloudList = json.members;
+          }
+        }
+      } catch {}
+
+      // 2. Direct public Blob URL fallback
+      if (!cloudList) {
+        try {
+          const res = await fetch(`https://xuljvukumnyhzztx.public.blob.vercel-storage.com/members.json?t=${Date.now()}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json) && json.length > 0) {
+              cloudList = json;
+            }
+          }
+        } catch {}
+      }
+
+      if (cloudList && cloudList.length > 0) {
+        const localList = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+        const mergedMap = new Map<string, MemberProfile>();
+        // Add initial members first
+        INITIAL_MEMBERS.forEach((m) => mergedMap.set((m.email || '').toLowerCase().trim(), m));
+        // Add local members
+        localList.forEach((m) => mergedMap.set((m.email || '').toLowerCase().trim(), m));
+        // Merge cloud members
+        cloudList.forEach((m) => mergedMap.set((m.email || '').toLowerCase().trim(), m));
+
+        const mergedArray = Array.from(mergedMap.values());
+        saveLocal(KEYS.MEMBERS, mergedArray);
+        return mergedArray;
+      }
+    } catch (e) {
+      console.warn('Cloud members sync notice (using local storage):', e);
+    }
+    return this.getLocalMembersSync();
+  },
+
+  async pushMembersToCloud(members: MemberProfile[]): Promise<void> {
+    try {
+      if (typeof window === 'undefined' || !window.location || typeof fetch === 'undefined') return;
+      await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ members }),
+      });
+    } catch (e) {
+      console.warn('Failed to push members to cloud:', e);
+    }
+  },
+
   // ---------------- MEMBERSHIP OPERATIONS ----------------
   async getMembers(): Promise<MemberProfile[]> {
     let list: MemberProfile[] = [];
@@ -715,7 +822,12 @@ export const DataService = {
       }
     }
     if (list.length === 0) {
-      list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+      list = this.getLocalMembersSync();
+    }
+
+    // Trigger non-blocking background sync if in browser
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      this.syncCloudMembers().catch(() => {});
     }
 
     // Refresh dynamic fee status based on current date and backfill missing schema fields
@@ -787,6 +899,7 @@ export const DataService = {
 
     const updated = [...members, newMember];
     saveLocal(KEYS.MEMBERS, updated);
+    this.pushMembersToCloud(updated);
 
     if (this.isLiveFirebase() && db) {
       try {
@@ -815,6 +928,7 @@ export const DataService = {
     const updatedMember = { ...members[index], ...updates };
     members[index] = updatedMember;
     saveLocal(KEYS.MEMBERS, members);
+    this.pushMembersToCloud(members);
 
     if (this.isLiveFirebase() && db) {
       try {
@@ -879,6 +993,7 @@ export const DataService = {
 
     const filtered = members.filter((m) => m.id !== id);
     saveLocal(KEYS.MEMBERS, filtered);
+    this.pushMembersToCloud(filtered);
 
     // 1. Immediately purge all chat messages involving this deleted member
     try {
@@ -1070,7 +1185,7 @@ export const DataService = {
     const cleanTarget = (email || '').trim().toLowerCase();
     if (!cleanTarget) return undefined;
     const members = await this.getMembers();
-    return members.find((m) => {
+    let found = members.find((m) => {
       const memberEmail = (m.email || '').trim().toLowerCase();
       if (memberEmail === cleanTarget) return true;
       // Also match if user enters syedabsar99 or syednoorulabsar for Syed Noor Ul Absar
@@ -1082,6 +1197,24 @@ export const DataService = {
       }
       return false;
     });
+
+    if (found) return found;
+
+    // If not found in current memory/local storage, attempt cloud sync
+    if (typeof fetch !== 'undefined') {
+      try {
+        const synced = await this.syncCloudMembers();
+        found = synced.find((m) => {
+          const memberEmail = (m.email || '').trim().toLowerCase();
+          return memberEmail === cleanTarget;
+        });
+        if (found) return found;
+      } catch {}
+    }
+
+    // Direct fallback to INITIAL_MEMBERS
+    found = INITIAL_MEMBERS.find((m) => (m.email || '').trim().toLowerCase() === cleanTarget);
+    return found;
   },
 
   async updateMemberPasscode(phoneNumber: string, newPasscode: string): Promise<boolean> {

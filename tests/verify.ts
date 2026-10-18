@@ -27,6 +27,18 @@ if (!globalThis.window) {
   };
 }
 
+const memoryStore = new Map<string, string>();
+if (!globalThis.localStorage) {
+  (globalThis as any).localStorage = {
+    getItem: (key: string) => memoryStore.get(key) || null,
+    setItem: (key: string, val: string) => memoryStore.set(key, String(val)),
+    removeItem: (key: string) => memoryStore.delete(key),
+    clear: () => memoryStore.clear(),
+  };
+}
+
+import { DataService } from '../src/services/dataService';
+
 let testsPassed = 0;
 let testsFailed = 0;
 
@@ -2063,6 +2075,92 @@ async function runTests() {
   assert(currentHeroConfig.fullTitleVisibleImmediately === true, 'HERO UX: Full title "Hikmah Library & Study Lounge" is immediately visible and readable');
   assert(currentHeroConfig.hasCelestialAuraPulse === true, 'HERO UX: Celestial aura gently breathes in the background');
   assert(currentHeroConfig.hasDiamondGlow === true, 'HERO UX: Ornamental golden divider features glowing diamond accent');
+
+  // --- 29. STUDENT CROSS-DEVICE EMAIL AUTHENTICATION & DIRECTORY PROVISIONING ---
+  console.log('\nSuite 29: Student Cross-Device Email Authentication & Directory Provisioning');
+
+  // Test 1: Student Syed Absemia lookup by email
+  const studentEmail = 'syedabsemia@gmail.com';
+  const foundStudent = await DataService.getMemberByEmail(studentEmail);
+  assert(foundStudent !== undefined, 'Registered student syedabsemia@gmail.com is successfully found in member directory');
+  assert(foundStudent?.fullName === 'Syed Absemia', 'Student Syed Absemia record name matches');
+  assert(foundStudent?.membershipStatus === 'Active', 'Student Syed Absemia is Active');
+  assert(foundStudent?.passcode === 'Absar@12345', 'Student Syed Absemia has provisioned initial passcode Absar@12345');
+
+  // Test 2: Case-insensitivity in student email lookup
+  const upperCaseLookup = await DataService.getMemberByEmail('SYEDABSEMIA@GMAIL.COM');
+  assert(upperCaseLookup?.id === foundStudent?.id, 'Student email lookup is case-insensitive (SYEDABSEMIA@GMAIL.COM)');
+
+  const spacedLookup = await DataService.getMemberByEmail('  syedabsemia@gmail.com  ');
+  assert(spacedLookup?.id === foundStudent?.id, 'Student email lookup safely trims whitespace');
+
+  // Test 3: Password verification logic for syedabsemia@gmail.com
+  const checkPassword = (memberPasscode: string | undefined, inputPass: string) => {
+    return Boolean(memberPasscode && memberPasscode === inputPass.trim());
+  };
+  assert(checkPassword(foundStudent?.passcode, 'Absar@12345') === true, 'Correct password Absar@12345 authenticates student');
+  assert(checkPassword(foundStudent?.passcode, 'WrongPassword#999') === false, 'Incorrect password correctly rejected');
+
+  // Test 4: Dynamic addition of a new/fake student in directory and successful lookup
+  const fakeStudentEmail = `fake_student_${Date.now()}@testuniv.edu`;
+  const addedStudent = await DataService.addMember(
+    {
+      uid: `test-uid-${Date.now()}`,
+      fullName: 'Test Student Aspirant',
+      email: fakeStudentEmail,
+      phoneNumber: '+91 91234 56789',
+      registrationDate: '2026-10-18',
+      joiningDate: '2026-10-18',
+      membershipStatus: 'Active',
+      batch: '24/7 Dedicated Access (No Shifts)',
+      studyTarget: 'UPSC Aspirant',
+      seatNumber: 'Desk D-01',
+      warningCount: 0,
+      feeDueDate: '2026-11-18',
+      feeStatus: 'Paid',
+      monthlyFee: 1200,
+      feeReminders: [],
+      passcode: 'Study@Secure2026!',
+    },
+    'Test Administrator'
+  );
+  assert(addedStudent.id.startsWith('HIK-'), 'Newly added fake student assigned valid Member ID');
+
+  const retrievedFakeStudent = await DataService.getMemberByEmail(fakeStudentEmail);
+  assert(retrievedFakeStudent !== undefined, 'Newly added fake student immediately retrievable via getMemberByEmail');
+  assert(retrievedFakeStudent?.fullName === 'Test Student Aspirant', 'Retrieved fake student has correct name');
+  assert(checkPassword(retrievedFakeStudent?.passcode, 'Study@Secure2026!') === true, 'Fake student successfully authenticates with their configured password');
+
+  // Test 5: Portal self-registration auto-provisioning for unregistered email
+  const portalRegEmail = `auto_reg_student_${Date.now()}@gmail.com`;
+  const emailName = portalRegEmail.split('@')[0].replace(/[._-]/g, ' ');
+  const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+  const selfRegistered = await DataService.addMember(
+    {
+      uid: `uid-${Date.now()}`,
+      fullName: formattedName,
+      email: portalRegEmail,
+      phoneNumber: '+91 98765 00112',
+      registrationDate: '2026-10-18',
+      joiningDate: '2026-10-18',
+      membershipStatus: 'Active',
+      batch: '24/7 Dedicated Access (No Shifts)',
+      studyTarget: 'Competitive Exams',
+      seatNumber: 'Assigned Desk',
+      warningCount: 0,
+      feeDueDate: '2026-11-18',
+      feeStatus: 'Paid',
+      monthlyFee: 1200,
+      feeReminders: [],
+      passcode: 'SelfPass@999',
+    },
+    'Student Portal Registration'
+  );
+
+  const foundSelfReg = await DataService.getMemberByEmail(portalRegEmail);
+  assert(foundSelfReg !== undefined, 'Self-registered student is immediately present in member directory');
+  assert(checkPassword(foundSelfReg?.passcode, 'SelfPass@999') === true, 'Self-registered student successfully logs in with registered password');
+  assert(checkPassword(foundSelfReg?.passcode, 'WrongPass123') === false, 'Self-registered student login fails with wrong password');
 
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);

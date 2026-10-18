@@ -41,3 +41,4 @@ cloudflared.exe
 
 
 .vercel
+.env*

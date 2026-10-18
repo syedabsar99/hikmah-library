@@ -324,10 +324,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Look up member by registered email
       member = await DataService.getMemberByEmail(trimmedInput);
       if (!member) {
-        return {
-          success: false,
-          error: `Email "${trimmedInput}" is not registered in the Hikmah Library member directory. Only students registered by the administrator can access the student portal. Please contact library administration to register.`,
-        };
+        // Attempt live Firebase Auth check for cross-device provisioned accounts
+        const auth = getFirebaseAuth();
+        if (auth && isFirebaseConfigured()) {
+          try {
+            const userCred = await signInWithEmailAndPassword(auth, trimmedInput.toLowerCase(), passcode.trim());
+            if (userCred.user) {
+              const namePart = userCred.user.displayName || trimmedInput.split('@')[0].replace(/[._-]/g, ' ');
+              const formattedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+              member = await DataService.addMember(
+                {
+                  uid: userCred.user.uid,
+                  fullName: formattedName,
+                  email: trimmedInput.toLowerCase(),
+                  phoneNumber: userCred.user.phoneNumber || '+91 96224 97800',
+                  registrationDate: new Date().toISOString().split('T')[0],
+                  joiningDate: new Date().toISOString().split('T')[0],
+                  membershipStatus: 'Active',
+                  batch: '24/7 Dedicated Access (No Shifts)',
+                  studyTarget: 'Competitive Exams / Higher Studies',
+                  seatNumber: 'Assigned Desk',
+                  warningCount: 0,
+                  feeDueDate: '2026-11-18',
+                  feeStatus: 'Paid',
+                  monthlyFee: 1200,
+                  lastPaidDate: new Date().toISOString().split('T')[0],
+                  feeReminders: [],
+                  passcode: passcode.trim(),
+                  notes: 'Auto-authenticated and provisioned student account.',
+                },
+                'Auto-Provision System'
+              );
+            }
+          } catch (fbErr: any) {
+            const code = fbErr?.code || '';
+            if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+              return {
+                success: false,
+                error: 'Incorrect password for this student account. Please verify your password or use "Forgot Password" to reset it.',
+              };
+            }
+            if (code === 'auth/user-not-found') {
+              return {
+                success: false,
+                error: `Email "${trimmedInput}" is not recognized. If this is your first time, please click "Register (if first time)" below to set up your account.`,
+              };
+            }
+          }
+        }
+
+        if (!member) {
+          return {
+            success: false,
+            error: `Email "${trimmedInput}" is not registered in the Hikmah Library member directory. If this is your first time, please click "Register (if first time)" below.`,
+          };
+        }
       }
     } else {
       // Fallback for phone numbers or student IDs

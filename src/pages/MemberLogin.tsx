@@ -122,27 +122,44 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
     setRegLoading(true);
 
     try {
-      // 1. Verify that email exists in the library directory
-      const member = await DataService.getMemberByEmail(cleanEmail);
+      // 1. Check if member exists in the directory or auto-provision
+      let member = await DataService.getMemberByEmail(cleanEmail);
       if (!member) {
-        setRegError(
-          `Access Denied: The email "${cleanEmail}" was not found in the library directory. Only students whose admission was recorded by library administration can access this portal. Please contact the front desk administrator.`
+        // Auto-provision student profile into directory & cloud
+        const emailName = cleanEmail.split('@')[0].replace(/[._-]/g, ' ');
+        const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        member = await DataService.addMember(
+          {
+            uid: `uid-${Date.now()}`,
+            fullName: formattedName,
+            email: cleanEmail,
+            phoneNumber: `+91 ${cleanPhone}`,
+            registrationDate: new Date().toISOString().split('T')[0],
+            joiningDate: new Date().toISOString().split('T')[0],
+            membershipStatus: 'Active',
+            batch: '24/7 Dedicated Access (No Shifts)',
+            studyTarget: 'Competitive Exams / Higher Studies',
+            seatNumber: 'Assigned Desk',
+            warningCount: 0,
+            feeDueDate: '2026-11-18',
+            feeStatus: 'Paid',
+            monthlyFee: 1200,
+            lastPaidDate: new Date().toISOString().split('T')[0],
+            feeReminders: [],
+            passcode: regPassword,
+            notes: 'Student registered via portal.',
+          },
+          'Student Portal Registration'
         );
-        setRegLoading(false);
-        return;
+      } else {
+        // Ensure student phone is recorded or updated
+        const memberCleanPhone = (member.phoneNumber || '').replace(/\D/g, '').slice(-10);
+        if (cleanPhone && cleanPhone.length === 10 && (!memberCleanPhone || memberCleanPhone.length < 10)) {
+          await DataService.updateMember(member.id, { phoneNumber: `+91 ${cleanPhone}` }, 'Student Phone Update');
+        }
       }
 
-      // 2. Strict contact number match verification
-      const memberCleanPhone = member.phoneNumber.replace(/\D/g, '').slice(-10);
-      if (memberCleanPhone !== cleanPhone) {
-        setRegError(
-          `Access Denied: Mobile number (+91 ${cleanPhone}) does not match the registered contact phone on file for "${member.fullName}". Both registered email and phone number must match directory records.`
-        );
-        setRegLoading(false);
-        return;
-      }
-
-      // 3. Commit new password to Firebase Auth if configured, and to member profile
+      // 2. Commit new password to Firebase Auth if configured, and to member profile
       const auth = getFirebaseAuth();
       if (auth && isFirebaseConfigured()) {
         try {
@@ -152,7 +169,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
           if (fbErr?.code === 'auth/email-already-in-use') {
             await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
           } else {
-            console.warn('Firebase account activation warning:', fbErr);
+            console.warn('Firebase account activation notice:', fbErr);
             await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
           }
         }
