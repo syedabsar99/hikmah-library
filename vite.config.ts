@@ -215,6 +215,7 @@ function authBackendPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [react(), authBackendPlugin()],
   server: {
     host: true, // Listen on all network interfaces

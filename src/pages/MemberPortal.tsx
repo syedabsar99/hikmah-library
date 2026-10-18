@@ -34,7 +34,8 @@ interface MemberPortalProps {
 }
 
 export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavigate }) => {
-  const { currentUser, currentMemberProfile: authMemberProfile, logout, refreshProfile } = useAuth();
+  const { currentUser, currentMemberProfile: authMemberProfile, logout, refreshProfile, adminPhone, adminEmail } = useAuth();
+  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
 
   // Member live profile state (synced with DataService)
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(authMemberProfile);
@@ -51,8 +52,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     id: 'admin-chief-001',
     uid: 'admin-chief-001',
     fullName: 'Chief Librarian & Administration',
-    email: 'admin@hikmahlibrary.com',
-    phoneNumber: '+91 9622497806',
+    email: adminEmail || 'admin@hikmahlibrary.com',
+    phoneNumber: displayPhone,
     registrationDate: '2025-01-01',
     joiningDate: '2025-01-01',
     membershipStatus: 'Active',
@@ -810,7 +811,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
               <div style={{ fontSize: '0.82rem', color: '#94A3B8', marginTop: '6px', lineHeight: '1.5' }}>
                 UPI ID: <strong style={{ color: 'var(--accent-gold)' }}>hikmah.study@upi</strong>
                 <br />
-                Helpline: <strong>+91 9622497806</strong>
+                Helpline: <strong>{displayPhone}</strong>
               </div>
               <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '8px' }}>
                 Once paid, administrator marks account cleared in real time.

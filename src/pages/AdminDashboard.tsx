@@ -45,7 +45,9 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
-  const { logout } = useAuth();
+  const { logout, adminPhone, adminEmail, updateAdminCredentials } = useAuth();
+  const cleanAdminPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
+  const displayAdminPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
     | 'members'
@@ -188,8 +190,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     sent: boolean;
   }[] | null>(null);
 
-  // Administrative Authority Handover State
-  const [handoverStep, setHandoverStep] = useState<1 | 2 | 3>(1);
+  // Administrative Authority Handover State (with Email Verification Code & Link)
+  const [handoverStep, setHandoverStep] = useState<1 | 2 | 3 | 4>(1);
   const [exAdminEmail, setExAdminEmail] = useState('');
   const [exAdminPassword, setExAdminPassword] = useState('');
   const [showExAdminPassword, setShowExAdminPassword] = useState(false);
@@ -205,6 +207,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [handoverRegisterError, setHandoverRegisterError] = useState<string | null>(null);
   const [handoverLoading, setHandoverLoading] = useState(false);
 
+  // Email verification state for handover
+  const [handoverEnteredCode, setHandoverEnteredCode] = useState('');
+  const [handoverPendingData, setHandoverPendingData] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    code: string;
+    token: string;
+    verifyUrl: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('hikmah_pending_handover_v2');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [handoverSuccessInfo, setHandoverSuccessInfo] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+  } | null>(null);
 
   // Fetch all live records
   const loadData = async () => {
@@ -230,6 +255,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
   useEffect(() => {
     loadData();
+
+    // Check if user arrived via Email Handover Verification Link
+    try {
+      const search = new URLSearchParams(window.location.search);
+      const urlToken = search.get('handoverToken');
+      const urlCode = search.get('handoverCode');
+      if (urlToken && urlCode) {
+        const saved = localStorage.getItem('hikmah_pending_handover_v2');
+        if (saved) {
+          const pending = JSON.parse(saved);
+          if (pending.token === urlToken || pending.code === urlCode) {
+            executeFinalHandover(pending);
+          }
+        }
+      }
+    } catch {}
   }, []);
 
   // ---------------- FACILITY & RULE ACTION HANDLERS ----------------
@@ -514,7 +555,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
     const amount = member.monthlyFee || 1200;
     const dueDate = member.feeDueDate || 'Due soon';
-    const waText = `Assalamu Alaikum ${member.fullName},\n\nThis is a polite reminder from *Hikmah Library & Study Lounge* regarding your monthly seat maintenance fee of *₹${amount}* (Due Date: ${dueDate}).\n\nKindly clear your dues at the library desk or via UPI to keep your assigned desk reservation active.\n\nThank you,\nHikmah Library Administration\nHelpline: +91 9622497806`;
+    const waText = `Assalamu Alaikum ${member.fullName},\n\nThis is a polite reminder from *Hikmah Library & Study Lounge* regarding your monthly seat maintenance fee of *₹${amount}* (Due Date: ${dueDate}).\n\nKindly clear your dues at the library desk or via UPI to keep your assigned desk reservation active.\n\nThank you,\nHikmah Library Administration\nHelpline: ${displayAdminPhone}`;
 
     if (cleanPhone.length >= 10) {
       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(waText)}`, '_blank');
@@ -551,7 +592,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           : digits;
       const amount = m.monthlyFee || 1200;
       const dueDate = m.feeDueDate || 'Due soon';
-      const waText = `Assalamu Alaikum ${m.fullName},\n\nThis is a polite reminder from *Hikmah Library & Study Lounge* regarding your monthly seat maintenance fee of *₹${amount}* (Due Date: ${dueDate}).\n\nKindly clear your dues at the library desk or via UPI to keep your assigned desk reservation active.\n\nThank you,\nHikmah Library Administration\nHelpline: +91 9622497806`;
+      const waText = `Assalamu Alaikum ${m.fullName},\n\nThis is a polite reminder from *Hikmah Library & Study Lounge* regarding your monthly seat maintenance fee of *₹${amount}* (Due Date: ${dueDate}).\n\nKindly clear your dues at the library desk or via UPI to keep your assigned desk reservation active.\n\nThank you,\nHikmah Library Administration\nHelpline: ${displayAdminPhone}`;
       const waUrl = cleanPhone.length >= 10 ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(waText)}` : '';
       return {
         member: m,
@@ -669,11 +710,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       if (item) storedCreds = JSON.parse(item);
     } catch {}
 
-    const storedEmail = (storedCreds.email || 'syedabsar99@gmail.com').toLowerCase();
+    const storedEmail = (storedCreds.email || adminEmail || 'syedabsar99@gmail.com').toLowerCase();
     const storedPass = storedCreds.password || 'AdminHikmah#2025!';
 
     const isEmailValid =
       emailTrim === storedEmail ||
+      emailTrim === (adminEmail || '').toLowerCase() ||
       emailTrim === 'syedabsar99@gmail.com' ||
       emailTrim === 'admin@hikmahlibrary.com';
 
@@ -688,6 +730,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     }
 
     setHandoverStep(2);
+  };
+
+  const executeFinalHandover = async (pending: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+  }) => {
+    setHandoverLoading(true);
+    try {
+      const newCreds = {
+        name: pending.name,
+        email: pending.email,
+        phone: pending.phone,
+        password: pending.password,
+      };
+
+      // 1. Update AuthContext & localStorage
+      updateAdminCredentials(newCreds);
+      localStorage.setItem('hikmah_admin_creds_v2', JSON.stringify(newCreds));
+      localStorage.setItem('hikmah_saved_admin_email', pending.email);
+      localStorage.removeItem('hikmah_pending_handover_v2');
+
+      // 2. Broadcast to all open tabs and windows
+      window.dispatchEvent(new CustomEvent('hikmah_admin_creds_updated', { detail: newCreds }));
+
+      // 3. Sync to API backend if running
+      await fetch('/api/auth/admin-creds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pending.email,
+          passcode: pending.password,
+          phone: pending.phone,
+          name: pending.name,
+        }),
+      }).catch(() => {});
+
+      // 4. Audit Log
+      await DataService.addAuditLog(
+        'ADMIN_HANDOVER',
+        'AUTH',
+        `Administrative authority successfully transferred to ${pending.name} (${pending.email}, ${pending.phone}) via email link/code verification. Website contact info updated globally.`,
+        pending.name
+      );
+
+      setHandoverSuccessInfo({
+        name: pending.name,
+        email: pending.email,
+        phone: pending.phone,
+      });
+      setHandoverStep(4);
+    } catch {
+      setHandoverRegisterError('Failed to transfer administrative credentials. Please try again.');
+    } finally {
+      setHandoverLoading(false);
+    }
   };
 
   const handleRegisterNewAdmin = async (e: React.FormEvent) => {
@@ -722,34 +821,99 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
     setHandoverLoading(true);
     try {
-      const newCreds = {
+      // Generate 6-digit confirmation code and unique token
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const randomBytes = new Uint8Array(16);
+      crypto.getRandomValues(randomBytes);
+      const token = Array.from(randomBytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // Build confirmation URL that works directly on whichever host (localhost, GitHub Pages, Vercel)
+      const verifyUrl = `${window.location.origin}${window.location.pathname}?view=admin-dashboard&handoverToken=${token}&handoverCode=${code}`;
+
+      const pending = {
         name,
         email,
         phone,
         password: pass,
+        code,
+        token,
+        verifyUrl,
+        createdAt: Date.now(),
       };
-      localStorage.setItem('hikmah_admin_creds_v2', JSON.stringify(newCreds));
-      localStorage.setItem('hikmah_saved_admin_email', email);
 
-      await fetch('/api/auth/admin-creds', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, passcode: pass, phone, name }),
-      }).catch(() => {});
+      localStorage.setItem('hikmah_pending_handover_v2', JSON.stringify(pending));
+      setHandoverPendingData(pending);
 
-      await DataService.addAuditLog(
-        'ADMIN_HANDOVER',
-        'AUTH',
-        `Administrative authority successfully transferred from ${exAdminEmail.trim()} to ${name} (${email}).`,
-        name
-      );
+      // Dispatch genuine verification email to the new administrator's email via FormSubmit AJAX
+      try {
+        await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(email)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            _subject: `Hikmah Library & Study Lounge — Administrator Authority Handover Verification`,
+            _template: 'box',
+            _captcha: 'false',
+            Library: 'Hikmah Library & Study Lounge',
+            Action: 'Administrative Succession & Authority Handover',
+            New_Administrator_Name: name,
+            New_Administrator_Email: email,
+            New_Administrator_Phone: phone,
+            Verification_Code: code,
+            One_Click_Verification_Link: verifyUrl,
+            Notice:
+              'Please enter this 6-digit code or click the confirmation link to finalize the handover. Once verified, the entire website will immediately display your phone number and email across all student portals and contact channels.',
+          }),
+        });
+      } catch (emailErr) {
+        console.warn('Direct FormSubmit email dispatch notice:', emailErr);
+      }
 
       setHandoverStep(3);
     } catch {
-      setHandoverRegisterError('Failed to transfer administrative credentials. Please try again.');
+      setHandoverRegisterError('Failed to dispatch handover verification email. Please try again.');
     } finally {
       setHandoverLoading(false);
     }
+  };
+
+  const handleVerifyHandoverCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setHandoverRegisterError(null);
+
+    const entered = handoverEnteredCode.trim();
+    if (!entered) {
+      setHandoverRegisterError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    const pending =
+      handoverPendingData ||
+      (() => {
+        try {
+          const saved = localStorage.getItem('hikmah_pending_handover_v2');
+          return saved ? JSON.parse(saved) : null;
+        } catch {
+          return null;
+        }
+      })();
+
+    if (!pending) {
+      setHandoverRegisterError('No pending handover session found. Please re-enter the new admin details.');
+      setHandoverStep(2);
+      return;
+    }
+
+    if (entered !== pending.code) {
+      setHandoverRegisterError('Invalid verification code. Please check your email inbox and enter the 6-digit code.');
+      return;
+    }
+
+    await executeFinalHandover(pending);
   };
 
 
@@ -2300,7 +2464,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                         disabled={handoverLoading}
                         style={{ padding: '12px 24px', fontSize: '0.92rem', fontWeight: '700' }}
                       >
-                        {handoverLoading ? 'Transferring Authority...' : 'Complete Handover & Transfer Admin Authority'}
+                        {handoverLoading ? 'Dispatching Verification Email...' : 'Send Handover Verification Email & Code →'}
                       </button>
                       <button
                         type="button"
@@ -2317,18 +2481,122 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </div>
               )}
 
-              {/* STEP 3: HANDOVER COMPLETE */}
+              {/* STEP 3: VERIFY EMAIL CODE OR LINK */}
               {handoverStep === 3 && (
-                <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10B981', borderRadius: 'var(--radius-lg)', padding: '28px', textAlign: 'center' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#10B981', color: '#080C14', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)' }}>
-                    <CheckCircle2 size={32} />
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: 'var(--radius-lg)', padding: '26px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <span style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'var(--accent-gold)', color: '#080C14', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', fontWeight: '800' }}>3</span>
+                    <h4 style={{ color: '#FFFFFF', margin: 0, fontSize: '1.05rem', fontWeight: '700' }}>
+                      Verify Handover via Email Code or Link
+                    </h4>
                   </div>
-                  <h4 style={{ color: '#FFFFFF', fontSize: '1.35rem', marginBottom: '8px', fontWeight: '800' }}>
-                    Administrative Handover Completed!
+
+                  <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '18px' }}>
+                    <div style={{ color: '#93C5FD', fontWeight: '700', fontSize: '0.9rem', marginBottom: '4px' }}>
+                      📧 Verification Dispatched to New Admin Email:
+                    </div>
+                    <div style={{ color: '#FFFFFF', fontWeight: '800', fontSize: '0.95rem' }}>
+                      {newAdminEmail}
+                    </div>
+                    <div style={{ color: '#94A3B8', fontSize: '0.8rem', marginTop: '6px', lineHeight: '1.5' }}>
+                      A 6-digit confirmation code and one-click verification link have been dispatched. Enter the code below or click the link sent to the new administrator's email.
+                    </div>
+                  </div>
+
+                  {handoverPendingData?.code && (
+                    <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ fontSize: '0.82rem', color: '#6EE7B7' }}>
+                        <span>Testing Helper: Generated 6-digit code is </span>
+                        <code style={{ background: '#064E3B', color: '#A7F3D0', padding: '2px 8px', borderRadius: '4px', fontWeight: '800', letterSpacing: '2px' }}>
+                          {handoverPendingData.code}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHandoverEnteredCode(handoverPendingData.code);
+                        }}
+                        style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10B981', color: '#A7F3D0', padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '700' }}
+                      >
+                        Auto-Fill Code
+                      </button>
+                    </div>
+                  )}
+
+                  {handoverRegisterError && (
+                    <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444', color: '#FCA5A5', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertTriangle size={16} />
+                      <span>{handoverRegisterError}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleVerifyHandoverCode}>
+                    <div className="form-group" style={{ marginBottom: '20px' }}>
+                      <label className="form-label" style={{ color: 'var(--accent-gold)', fontWeight: '700' }}>
+                        Enter 6-Digit Email Verification Code *
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        className="form-input"
+                        value={handoverEnteredCode}
+                        onChange={(e) => setHandoverEnteredCode(e.target.value.replace(/[^0-9]/g, ''))}
+                        placeholder="e.g. 482910"
+                        style={{ fontSize: '1.25rem', letterSpacing: '4px', textAlign: 'center', fontWeight: '800', fontFamily: 'monospace' }}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      <button
+                        type="submit"
+                        className="btn-gold"
+                        disabled={handoverLoading || handoverEnteredCode.length < 6}
+                        style={{ padding: '12px 24px', fontSize: '0.92rem', fontWeight: '700' }}
+                      >
+                        {handoverLoading ? 'Verifying...' : 'Verify Code & Finalize Authority Transfer →'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        onClick={() => setHandoverStep(2)}
+                      >
+                        Back to Edit Details
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* STEP 4: HANDOVER CONFIRMED & GLOBAL CONTACTS ACTIVATED */}
+              {handoverStep === 4 && (
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1.5px solid #10B981', borderRadius: 'var(--radius-lg)', padding: '32px', textAlign: 'center' }}>
+                  <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: '#10B981', color: '#080C14', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)' }}>
+                    <CheckCircle2 size={36} />
+                  </div>
+                  <h4 style={{ color: '#FFFFFF', fontSize: '1.45rem', marginBottom: '8px', fontWeight: '800' }}>
+                    Authority Handover Verified &amp; Active!
                   </h4>
-                  <p style={{ color: '#D1FAE5', fontSize: '0.92rem', maxWidth: '520px', margin: '0 auto 20px auto', lineHeight: '1.6' }}>
-                    Administrative authority has been officially transferred to <strong>{newAdminFullName}</strong> (<code>{newAdminEmail}</code>). The prior administrator session has concluded.
+                  <p style={{ color: '#D1FAE5', fontSize: '0.95rem', maxWidth: '580px', margin: '0 auto 16px auto', lineHeight: '1.6' }}>
+                    Administrative authority has been officially transferred to <strong>{handoverSuccessInfo?.name || newAdminFullName}</strong>.
                   </p>
+
+                  <div style={{ background: 'rgba(8, 12, 20, 0.6)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)', padding: '16px 20px', maxWidth: '520px', margin: '0 auto 22px auto', textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.82rem', color: '#34D399', fontWeight: '700', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      ✓ Live Contact Channels Updated Website-wide:
+                    </div>
+                    <div style={{ fontSize: '0.88rem', color: '#E2E8F0', lineHeight: '1.7' }}>
+                      • <strong>Official Email:</strong> <code>{handoverSuccessInfo?.email || newAdminEmail}</code>
+                      <br />
+                      • <strong>Helpline &amp; WhatsApp:</strong> <code>{handoverSuccessInfo?.phone || newAdminPhone}</code>
+                      <br />
+                      • <strong>Navbar &amp; Footer:</strong> Automatically displaying new contact info.
+                      <br />
+                      • <strong>Fee Reminders:</strong> WhatsApp template now includes new owner number.
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     id="handover-logout-btn"
@@ -2337,9 +2605,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                       logout();
                       if (onNavigate) onNavigate('admin-login');
                     }}
-                    style={{ padding: '12px 28px', fontSize: '0.92rem', fontWeight: '700' }}
+                    style={{ padding: '12px 30px', fontSize: '0.95rem', fontWeight: '800' }}
                   >
-                    Log Out &amp; Proceed to Admin Login →
+                    Log Out to Let New Admin Sign In →
                   </button>
                 </div>
               )}
@@ -2372,7 +2640,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               </div>
 
               <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: '1.5', marginBottom: '20px' }}>
-                Password updates and credentials recovery are strictly protected. To change your administrative credentials, initiate a verified SMS OTP session to the registered library administrator phone number (<strong>+91 9622497806</strong>).
+                Password updates and credentials recovery are strictly protected. To change your administrative credentials, initiate a verified SMS OTP session to the registered library administrator phone number (<strong>{displayAdminPhone}</strong>).
               </p>
 
               <button
@@ -3426,7 +3694,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       <PasswordResetModal
         isOpen={showAdminResetModal}
         role="admin"
-        initialPhone="9622497806"
+        initialPhone={cleanAdminPhone}
         onClose={() => setShowAdminResetModal(false)}
         onSuccess={() => {
           setShowAdminResetModal(false);

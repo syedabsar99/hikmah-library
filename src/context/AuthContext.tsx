@@ -17,6 +17,10 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   getAdminPhoneNumber: () => string;
   getAdminEmail: () => string;
+  adminPhone: string;
+  adminEmail: string;
+  adminName: string;
+  updateAdminCredentials: (newCreds: { name?: string; email?: string; phone?: string; password?: string }) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,6 +39,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [currentMemberProfile, setCurrentMemberProfile] = useState<MemberProfile | null>(null);
+
+  const getAdminCredentials = () => {
+    try {
+      const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
+      if (item) {
+        const parsed = JSON.parse(item);
+        if (!parsed.email) {
+          parsed.email = 'syedabsar99@gmail.com';
+          localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
+      return { password: 'AdminHikmah#2025!', phone: '9622497806', email: 'syedabsar99@gmail.com', name: 'Chief Administrator' };
+    } catch {
+      return { password: 'AdminHikmah#2025!', phone: '9622497806', email: 'syedabsar99@gmail.com', name: 'Chief Administrator' };
+    }
+  };
+
+  const [adminCredsState, setAdminCredsState] = useState(() => getAdminCredentials());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setAdminCredsState(getAdminCredentials());
+    };
+    window.addEventListener('hikmah_admin_creds_updated', handleUpdate);
+    window.addEventListener('storage', (e) => {
+      if (e.key === ADMIN_CREDENTIALS_KEY) handleUpdate();
+    });
+    return () => {
+      window.removeEventListener('hikmah_admin_creds_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
+  const updateAdminCredentials = (newCreds: { name?: string; email?: string; phone?: string; password?: string }) => {
+    const current = getAdminCredentials();
+    const updated = {
+      ...current,
+      ...newCreds,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(updated));
+    setAdminCredsState(updated);
+    window.dispatchEvent(new CustomEvent('hikmah_admin_creds_updated', { detail: updated }));
+  };
 
   // Sync profile when member is logged in
   useEffect(() => {
@@ -57,23 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser?.role === 'member' && currentUser.memberId) {
       const p = await DataService.getMemberById(currentUser.memberId);
       if (p) setCurrentMemberProfile(p);
-    }
-  };
-
-  const getAdminCredentials = () => {
-    try {
-      const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
-      if (item) {
-        const parsed = JSON.parse(item);
-        if (!parsed.email) {
-          parsed.email = 'syedabsar99@gmail.com';
-          localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(parsed));
-        }
-        return parsed;
-      }
-      return { password: 'AdminHikmah#2025!', phone: '9622497806', email: 'syedabsar99@gmail.com' };
-    } catch {
-      return { password: 'AdminHikmah#2025!', phone: '9622497806', email: 'syedabsar99@gmail.com' };
     }
   };
 
@@ -378,6 +410,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshProfile,
         getAdminPhoneNumber,
         getAdminEmail,
+        adminPhone: adminCredsState.phone || '9622497806',
+        adminEmail: adminCredsState.email || 'syedabsar99@gmail.com',
+        adminName: adminCredsState.name || 'Chief Administrator',
+        updateAdminCredentials,
       }}
     >
       {children}
@@ -390,6 +426,9 @@ const defaultAuthContext: AuthContextType = {
   currentMemberProfile: null,
   isAdmin: false,
   isMember: false,
+  adminPhone: '9622497806',
+  adminEmail: 'syedabsar99@gmail.com',
+  adminName: 'Chief Administrator',
   loginAdmin: async () => ({ success: false, error: 'Authentication initializing' }),
   loginMember: async () => ({ success: false, error: 'Authentication initializing' }),
   logout: () => {},
@@ -398,6 +437,7 @@ const defaultAuthContext: AuthContextType = {
   refreshProfile: async () => {},
   getAdminPhoneNumber: () => '9622497806',
   getAdminEmail: () => 'syedabsar99@gmail.com',
+  updateAdminCredentials: () => {},
 };
 
 export const useAuth = () => {

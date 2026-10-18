@@ -9,10 +9,14 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
-  const { currentUser, isAdmin, isMember, logout } = useAuth();
+  const { currentUser, isAdmin, isMember, logout, adminPhone, adminEmail } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showContactDropdown, setShowContactDropdown] = useState(false);
   const contactDropdownRef = useRef<HTMLDivElement>(null);
+
+  const cleanPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
+  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
+  const contactEmail = adminEmail || 'syedabsar99@gmail.com';
 
   const handleNav = (view: string) => {
     onNavigate(view);
@@ -79,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <a
-                    href="https://wa.me/919622497806"
+                    href={`https://wa.me/91${cleanPhone.slice(-10)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="nav-contact-item"
@@ -90,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                     </div>
                     <div>
                       <div style={{ fontWeight: '700', color: '#FFFFFF' }}>WhatsApp Support</div>
-                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>+91 9622497806 • Quick Reply</div>
+                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{displayPhone} • Quick Reply</div>
                     </div>
                   </a>
 
@@ -111,7 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                   </a>
 
                   <a
-                    href="tel:9622497806"
+                    href={`tel:${cleanPhone}`}
                     className="nav-contact-item"
                     onClick={() => setShowContactDropdown(false)}
                   >
@@ -120,12 +124,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                     </div>
                     <div>
                       <div style={{ fontWeight: '700', color: '#FFFFFF' }}>Helpline / Direct Call</div>
-                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>+91 9622497806</div>
+                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{displayPhone}</div>
                     </div>
                   </a>
 
                   <a
-                    href="mailto:hikmahlibrary6@gmail.com"
+                    href={`mailto:${contactEmail}`}
                     className="nav-contact-item"
                     onClick={() => setShowContactDropdown(false)}
                   >
@@ -134,7 +138,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                     </div>
                     <div>
                       <div style={{ fontWeight: '700', color: '#FFFFFF' }}>Official Email</div>
-                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>hikmahlibrary6@gmail.com</div>
+                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{contactEmail}</div>
                     </div>
                   </a>
 
@@ -280,7 +284,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                 <InstagramIcon size={14} /> Instagram
               </a>
               <a
-                href="https://wa.me/919622497806"
+                href={`https://wa.me/91${cleanPhone.slice(-10)}`}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -299,7 +303,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                 <MessageCircle size={14} /> WhatsApp
               </a>
               <a
-                href="tel:9622497806"
+                href={`tel:${cleanPhone}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -316,7 +320,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                 <Phone size={14} /> Helpline
               </a>
               <a
-                href="mailto:hikmahlibrary6@gmail.com"
+                href={`mailto:${contactEmail}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -330,7 +334,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                   fontWeight: '600',
                 }}
               >
-                <Mail size={14} /> Official Email
+                <Mail size={14} /> Email
               </a>
             </div>
           </div>

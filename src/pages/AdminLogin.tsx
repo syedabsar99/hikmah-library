@@ -10,7 +10,8 @@ interface AdminLoginProps {
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess }) => {
-  const { loginAdmin } = useAuth();
+  const { loginAdmin, adminPhone } = useAuth();
+  const cleanAdminPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
   // Admin Login State - ALWAYS initialized to empty string (no dummy values)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -283,7 +284,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
       <PasswordResetModal
         isOpen={showPhoneModal}
         role="admin"
-        initialPhone="9622497806"
+        initialPhone={cleanAdminPhone}
         onClose={() => setShowPhoneModal(false)}
         onSuccess={(_, newPass) => {
           if (newPass) {

@@ -1,11 +1,17 @@
 import { BookOpen, MapPin, Phone, Mail, Clock, ShieldCheck, MessageCircle } from 'lucide-react';
 import { InstagramIcon } from './InstagramIcon';
+import { useAuth } from '../context/AuthContext';
 
 interface FooterProps {
   onNavigate: (view: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+  const { adminPhone, adminEmail } = useAuth();
+  const cleanPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
+  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
+  const contactEmail = adminEmail || 'syedabsar99@gmail.com';
+
   return (
     <footer className="app-footer">
       <div className="container footer-container">
@@ -64,20 +70,20 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               </div>
               <div className="footer-link-item">
                 <Phone size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
-                <a href="tel:9622497806" className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
-                  +91 9622497806
+                <a href={`tel:${cleanPhone}`} className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
+                  {displayPhone}
                 </a>
               </div>
               <div className="footer-link-item">
                 <MessageCircle size={16} style={{ color: '#25D366', flexShrink: 0 }} />
-                <a href="https://wa.me/919622497806" target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', fontWeight: '600' }} className="footer-text">
-                  WhatsApp: +91 9622497806
+                <a href={`https://wa.me/91${cleanPhone.slice(-10)}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', fontWeight: '600' }} className="footer-text">
+                  WhatsApp: {displayPhone}
                 </a>
               </div>
               <div className="footer-link-item">
                 <Mail size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
-                <a href="mailto:hikmahlibrary6@gmail.com" className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
-                  hikmahlibrary6@gmail.com
+                <a href={`mailto:${contactEmail}`} className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
+                  {contactEmail}
                 </a>
               </div>
               <div className="footer-link-item">

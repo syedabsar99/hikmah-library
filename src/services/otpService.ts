@@ -5,6 +5,28 @@
 export const OFFICIAL_LIBRARY_EMAIL = 'hikmahlibrary6@gmail.com';
 export const OFFICIAL_LIBRARY_PHONE = '9622497806';
 
+export const getActiveLibraryEmail = (): string => {
+  try {
+    const item = localStorage.getItem('hikmah_admin_creds_v2');
+    if (item) {
+      const parsed = JSON.parse(item);
+      if (parsed.email) return parsed.email;
+    }
+  } catch {}
+  return 'syedabsar99@gmail.com';
+};
+
+export const getActiveLibraryPhone = (): string => {
+  try {
+    const item = localStorage.getItem('hikmah_admin_creds_v2');
+    if (item) {
+      const parsed = JSON.parse(item);
+      if (parsed.phone) return parsed.phone;
+    }
+  } catch {}
+  return '9622497806';
+};
+
 export interface OtpDispatchResult {
   success: boolean;
   expiresAt: number;
@@ -120,7 +142,8 @@ class MultiChannelOtpService {
 
     // 3. Official Email Delivery Link
     const emailSubject = `Hikmah Library Verification Code: [${code}]`;
-    const emailBody = `Hikmah Library & Study Lounge\nOfficial Administration & Member Verification\n\nYour 6-Digit Verification Code is: ${code}\n\nValid for 5 minutes.\nRecipient: ${recipientName}\nDestination: ${destination}\n\nIf you did not request this code, contact administration immediately at +91 9622497806.`;
+    const activePhone = getActiveLibraryPhone();
+    const emailBody = `Hikmah Library & Study Lounge\nOfficial Administration & Member Verification\n\nYour 6-Digit Verification Code is: ${code}\n\nValid for 5 minutes.\nRecipient: ${recipientName}\nDestination: ${destination}\n\nIf you did not request this code, contact administration immediately at +91 ${activePhone}.`;
     const emailUrl = `mailto:${targetEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
 
     // Non-blocking background SMS API dispatch attempt
