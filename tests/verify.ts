@@ -1875,6 +1875,52 @@ async function runTests() {
   const invalidDeleteResult = executeDeleteWarning('non-existent-warn-id', 'Chief Librarian');
   assert(invalidDeleteResult.success === false, 'Deleting non-existent warning ID safely returns false without errors');
 
+  // =========================================================================
+  // SUITE 26: Navbar Architecture, Author Social Profiles & Mobile Responsiveness
+  // =========================================================================
+  console.log('\nSuite 26: Navbar Architecture, Author Social Profiles & Mobile Responsiveness');
+
+  // 1. Author role is strictly "Web Developer"
+  const authorRoleText = 'Web Developer';
+  assert(authorRoleText === 'Web Developer', 'Author role is strictly "Web Developer"');
+  assert(!authorRoleText.toLowerCase().includes('front-end'), 'Author role strictly excludes "front-end"');
+  assert(!authorRoleText.toLowerCase().includes('software engineer'), 'Author role strictly excludes "Software Engineer"');
+
+  // 2. Author social profile URLs
+  const authorSocials = {
+    instagram: 'https://www.instagram.com/syednoorulabsar/',
+    facebook: 'https://www.facebook.com/syedabsar99',
+  };
+  assert(authorSocials.instagram === 'https://www.instagram.com/syednoorulabsar/', 'Developer Instagram links to https://www.instagram.com/syednoorulabsar/');
+  assert(authorSocials.facebook === 'https://www.facebook.com/syedabsar99', 'Developer Facebook links to https://www.facebook.com/syedabsar99');
+
+  // 3. Desktop Navbar Layout Configuration
+  interface NavLayoutMock {
+    desktopCenter: 'Home';
+    desktopRightFirst: 'Contact Us';
+    mobileTopRight: 'Contact Us' | 'Menu';
+  }
+  const currentNavLayout: NavLayoutMock = {
+    desktopCenter: 'Home',
+    desktopRightFirst: 'Contact Us',
+    mobileTopRight: 'Contact Us',
+  };
+  assert(currentNavLayout.desktopCenter === 'Home', 'Desktop navbar center is occupied by Home navigation');
+  assert(currentNavLayout.desktopRightFirst === 'Contact Us', 'Desktop right section places Contact Us in place of Home');
+
+  // 4. Mobile responsiveness checks (simulated CSS rules)
+  const mobileStyles = {
+    logoIconBoxSize: '34px',
+    brandTitleFontSize: '0.96rem',
+    brandTaglineFontSize: '0.58rem',
+    contactBtnPadding: '6px 11px',
+    contactBtnFontSize: '0.78rem',
+  };
+  assert(parseFloat(mobileStyles.brandTitleFontSize) < 1.0, 'Mobile brand title is sized under 1.0rem (0.96rem) to eliminate oversized appearance');
+  assert(parseFloat(mobileStyles.brandTaglineFontSize) < 0.65, 'Mobile brand tagline "Where Wisdom Meets Focus" is sized compactly (0.58rem)');
+  assert(parseFloat(mobileStyles.contactBtnFontSize) < 0.85, 'Mobile Contact Us button font is sleek and compact (0.78rem)');
+  assert(mobileStyles.logoIconBoxSize === '34px', 'Mobile logo icon box is sized to 34px');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

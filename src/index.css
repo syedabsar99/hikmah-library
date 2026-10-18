@@ -726,6 +726,100 @@ input, select, textarea {
   flex-shrink: 0;
 }
 
+.nav-center-desktop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-home-link {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #E2E8F0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 7px 18px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.nav-home-link:hover {
+  color: var(--accent-gold);
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(212, 175, 55, 0.25);
+  transform: translateY(-1px);
+}
+
+.nav-home-link.active {
+  color: var(--accent-gold);
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
+.nav-right-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-wisdom-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid var(--border-gold);
+  color: var(--accent-gold-light);
+  padding: 8px 24px;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 26px;
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.2);
+  transition: all 0.2s ease;
+}
+
+.dev-social-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.dev-social-icon-btn.instagram {
+  background: rgba(244, 114, 182, 0.14);
+  color: #F472B6;
+  border: 1px solid rgba(244, 114, 182, 0.35);
+}
+
+.dev-social-icon-btn.instagram:hover {
+  background: rgba(244, 114, 182, 0.3);
+  color: #FFFFFF;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(244, 114, 182, 0.4);
+}
+
+.dev-social-icon-btn.facebook {
+  background: rgba(96, 165, 250, 0.14);
+  color: #60A5FA;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+}
+
+.dev-social-icon-btn.facebook:hover {
+  background: rgba(96, 165, 250, 0.3);
+  color: #FFFFFF;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.4);
+}
+
 /* ----------------------------------------------------
    RESPONSIVE DESIGN SYSTEM (ALL DEVICES & SCREENS)
 ---------------------------------------------------- */
@@ -797,12 +891,96 @@ input, select, textarea {
     padding: 0 16px !important;
   }
 
+  .nav-wrapper {
+    height: 64px !important;
+  }
+
+  .nav-center-desktop {
+    display: none !important;
+  }
+
   .nav-links-desktop {
     display: none !important;
   }
 
   .mobile-menu-btn {
-    display: block !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 9px !important;
+    color: #FFFFFF !important;
+    cursor: pointer;
+  }
+
+  .mobile-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: var(--accent-gold) !important;
+  }
+
+  /* Refined Mobile Brand Logo & Tagline - sleek, compact, eliminating awkward/big look */
+  .logo-brand {
+    gap: 10px !important;
+  }
+
+  .logo-icon-box {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 9px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .logo-icon-box svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .brand-title {
+    font-size: 0.96rem !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.15 !important;
+  }
+
+  .brand-tagline {
+    font-size: 0.58rem !important;
+    letter-spacing: 0.04em !important;
+    line-height: 1.1 !important;
+    margin-top: 2px !important;
+    white-space: nowrap !important;
+  }
+
+  /* Refined Mobile Contact Us Button - sleek, compact, elegant proportion */
+  .nav-right-area {
+    gap: 8px !important;
+  }
+
+  .nav-contact-btn {
+    padding: 6px 11px !important;
+    font-size: 0.78rem !important;
+    gap: 5px !important;
+    border-radius: var(--radius-pill) !important;
+  }
+
+  .nav-contact-btn svg.contact-btn-icon {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .nav-contact-dropdown-menu {
+    width: min(300px, calc(100vw - 24px)) !important;
+    right: 0 !important;
+    top: calc(100% + 8px) !important;
+  }
+
+  .hero-wisdom-badge {
+    padding: 6px 16px !important;
+    font-size: 0.74rem !important;
+    letter-spacing: 0.05em !important;
+    margin-bottom: 18px !important;
   }
 
   .data-table-container {
@@ -859,6 +1037,57 @@ input, select, textarea {
 
 /* Small Smartphone (<= 480px) */
 @media (max-width: 480px) {
+  .nav-wrapper {
+    height: 58px !important;
+  }
+
+  .logo-brand {
+    gap: 8px !important;
+  }
+
+  .logo-icon-box {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 8px !important;
+  }
+
+  .logo-icon-box svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  .brand-title {
+    font-size: 0.88rem !important;
+  }
+
+  .brand-tagline {
+    font-size: 0.52rem !important;
+    letter-spacing: 0.03em !important;
+  }
+
+  .nav-right-area {
+    gap: 6px !important;
+  }
+
+  .nav-contact-btn {
+    padding: 5px 8px !important;
+    font-size: 0.72rem !important;
+    gap: 4px !important;
+  }
+
+  .mobile-menu-btn {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 7px !important;
+  }
+
+  .hero-wisdom-badge {
+    padding: 5px 12px !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.03em !important;
+    margin-bottom: 14px !important;
+  }
+
   .hero-title-epic {
     font-size: 2.15rem !important;
     letter-spacing: -0.025em !important;

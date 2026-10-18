@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BookOpen, MapPin, Phone, Mail, Clock, ShieldCheck, MessageCircle } from 'lucide-react';
 import { InstagramIcon } from './InstagramIcon';
+import { FacebookIcon } from './FacebookIcon';
 import { useAuth } from '../context/AuthContext';
 import { getAssetUrl } from '../utils/assets';
 
@@ -182,21 +183,45 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <div className="footer-dev-tag">
                 System Architecture &amp; Full-Stack Development
               </div>
-              <div className="footer-dev-name">
-                Designed &amp; Developed by{' '}
-                <span
-                  style={{
-                    color: '#FACC15',
-                    fontWeight: '900',
-                    letterSpacing: '0.02em',
-                    textShadow: '0 0 16px rgba(250, 204, 21, 0.55), 0 0 3px #FACC15',
-                  }}
-                >
-                  Syed Absar
+              <div className="footer-dev-name" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <span>
+                  Designed &amp; Developed by{' '}
+                  <span
+                    style={{
+                      color: '#FACC15',
+                      fontWeight: '900',
+                      letterSpacing: '0.02em',
+                      textShadow: '0 0 16px rgba(250, 204, 21, 0.55), 0 0 3px #FACC15',
+                    }}
+                  >
+                    Syed Absar
+                  </span>
+                </span>
+                <span className="footer-dev-socials" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '2px' }}>
+                  <a
+                    href="https://www.instagram.com/syednoorulabsar/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Instagram - @syednoorulabsar"
+                    aria-label="Instagram Profile"
+                    className="dev-social-icon-btn instagram"
+                  >
+                    <InstagramIcon size={14} />
+                  </a>
+                  <a
+                    href="https://www.facebook.com/syedabsar99"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Facebook - @syedabsar99"
+                    aria-label="Facebook Profile"
+                    className="dev-social-icon-btn facebook"
+                  >
+                    <FacebookIcon size={14} />
+                  </a>
                 </span>
               </div>
               <div className="footer-dev-role">
-                Software Engineer, Front End Web Developer
+                Web Developer
               </div>
             </div>
           </div>

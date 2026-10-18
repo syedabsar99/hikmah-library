@@ -49,8 +49,23 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
           </div>
         </div>
 
-        {/* Desktop Single "Contact Us" Dropdown Button */}
-        <div className="nav-contact-dropdown-container" ref={contactDropdownRef}>
+        {/* Desktop Center: Home */}
+        <div className="nav-center-desktop">
+          <button
+            id="nav-home-btn"
+            type="button"
+            onClick={() => handleNav('home')}
+            className={`nav-home-link ${currentView === 'home' ? 'active' : ''}`}
+            title="Navigate to Home"
+          >
+            Home
+          </button>
+        </div>
+
+        {/* Right Section: Contact Us dropdown + Action links + Mobile Menu Toggle */}
+        <div className="nav-right-area">
+          {/* Single "Contact Us" Dropdown Button */}
+          <div className="nav-contact-dropdown-container" ref={contactDropdownRef}>
             <button
               id="nav-contact-us-btn"
               type="button"
@@ -59,10 +74,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
               aria-expanded={showContactDropdown}
               title="Contact Hikmah Library administration"
             >
-              <Phone size={15} style={{ color: 'var(--accent-gold)' }} />
-              <span>Contact Us</span>
+              <Phone className="contact-btn-icon" size={14} style={{ color: 'var(--accent-gold)' }} />
+              <span className="contact-btn-text">Contact Us</span>
               <ChevronDown
-                size={14}
+                size={13}
                 style={{
                   transform: showContactDropdown ? 'rotate(180deg)' : 'none',
                   transition: 'transform 0.2s ease',
@@ -159,21 +174,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
             )}
           </div>
 
-        {/* Desktop Nav Links */}
-        <div className="nav-links-desktop" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <button
-            onClick={() => handleNav('home')}
-            style={{
-              color: currentView === 'home' ? 'var(--accent-gold)' : '#E2E8F0',
-              fontWeight: currentView === 'home' ? '700' : '500',
-              fontSize: '0.95rem',
-            }}
-          >
-            Home
-          </button>
-
-          {/* User Status / Action Buttons */}
-          <div style={{ marginLeft: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Desktop Nav Actions */}
+          <div className="nav-links-desktop">
             {isAdmin && (
               <button
                 id="nav-admin-console-btn"
@@ -233,17 +235,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
               </>
             )}
           </div>
-        </div>
 
-        {/* Mobile Hamburger Toggle */}
-        <button
-          className="mobile-menu-btn"
-          style={{ display: 'none', color: '#FFFFFF' }}
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle Navigation"
-        >
-          {mobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
-        </button>
+          {/* Mobile Hamburger Toggle */}
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle Navigation"
+          >
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer Menu */}

@@ -258,24 +258,7 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
         <div className="container" style={{ position: 'relative', zIndex: 2 }}>
           <div style={{ maxWidth: '920px', margin: '0 auto', textAlign: 'center' }}>
             {/* Tagline Badge */}
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'rgba(245, 158, 11, 0.12)',
-                border: '1px solid var(--border-gold)',
-                color: 'var(--accent-gold-light)',
-                padding: '8px 24px',
-                borderRadius: 'var(--radius-pill)',
-                fontSize: '0.85rem',
-                fontWeight: '700',
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                marginBottom: '26px',
-                boxShadow: '0 0 24px rgba(245, 158, 11, 0.2)',
-              }}
-            >
+            <div className="hero-wisdom-badge">
               <Sparkles size={16} color="var(--accent-gold)" /> WHERE WISDOM MEETS FOCUS
             </div>
 
