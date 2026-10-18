@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { DataService } from '../services/dataService';
 import { EmailPasswordResetModal } from '../components/EmailPasswordResetModal';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { getFirebaseAuth, isFirebaseConfigured } from '../services/firebase';
 import {
   UserCheck,
   Lock,
@@ -140,12 +142,27 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
         return;
       }
 
-      // 3. Commit new password to member profile
-      const updated = await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
-      if (!updated) {
-        setRegError('Failed to activate account. Please try again or contact administration.');
-        setRegLoading(false);
-        return;
+      // 3. Commit new password to Firebase Auth if configured, and to member profile
+      const auth = getFirebaseAuth();
+      if (auth && isFirebaseConfigured()) {
+        try {
+          const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, regPassword);
+          await DataService.updateMember(member.id, { passcode: regPassword, uid: userCred.user.uid }, 'Student Activation & UID Sync');
+        } catch (fbErr: any) {
+          if (fbErr?.code === 'auth/email-already-in-use') {
+            await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
+          } else {
+            console.warn('Firebase account activation warning:', fbErr);
+            await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
+          }
+        }
+      } else {
+        const updated = await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
+        if (!updated) {
+          setRegError('Failed to activate account. Please try again or contact administration.');
+          setRegLoading(false);
+          return;
+        }
       }
 
       // 4. Success - prepopulate sign in form and return student to login view

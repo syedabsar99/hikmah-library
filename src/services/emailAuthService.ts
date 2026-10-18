@@ -1,5 +1,8 @@
 import {
+  sendPasswordResetEmail,
   verifyPasswordResetCode,
+  confirmPasswordReset as fbConfirmPasswordReset,
+  type ActionCodeSettings,
 } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -8,19 +11,14 @@ import { validatePasswordPolicy } from '../utils/validation';
 
 export const OFFICIAL_ADMIN_EMAIL = 'syedabsar99@gmail.com';
 export const ADMIN_CREDENTIALS_KEY = 'hikmah_admin_creds_v2';
-const LOCAL_RESET_TOKENS_KEY = 'hikmah_secure_reset_tokens_v2';
-const CONSUMED_TOKENS_KEY = 'hikmah_consumed_tokens_v2';
 
-// Universal cryptographic signing secret for cross-device stateless tokens
-const TOKEN_SECRET_SALT = 'HIKMAH_WISDOM_MEETS_FOCUS_SECURE_TOKEN_2026';
+export const GENERIC_RESET_SUCCESS_MESSAGE =
+  'If your email address is registered and configured, a password reset link has been dispatched. Please check your inbox and Spam folder.';
 
 export interface EmailResetDispatchResult {
   success: boolean;
   message: string;
   cooldownSeconds?: number;
-  resetUrl?: string;
-  rawToken?: string;
-  rawCode?: string;
   error?: string;
 }
 
@@ -37,25 +35,8 @@ export interface ConfirmResetResult {
   error?: string;
 }
 
-interface StatelessTokenPayload {
-  email: string;
-  role: 'admin' | 'member';
-  iat: number;
-  exp: number;
-  nonce: string;
-}
-
-interface LocalResetTokenEntry {
-  tokenHash: string;
-  rawCode?: string;
-  email: string;
-  role: 'admin' | 'member';
-  expiresAt: number;
-  used: boolean;
-}
-
 class RealEmailAuthService {
-  // 60-second in-memory cooldown tracker by email
+  // 60-second in-memory cooldown tracker by email to prevent abuse
   private cooldowns: Map<string, number> = new Map();
 
   /**
@@ -88,7 +69,7 @@ class RealEmailAuthService {
   /**
    * Sets the 60-second cooldown for an email.
    */
-  private setCooldown(email: string) {
+  public setCooldown(email: string) {
     const norm = this.normalizeEmail(email);
     if (norm.isValid) {
       this.cooldowns.set(norm.email, Date.now());
@@ -96,7 +77,7 @@ class RealEmailAuthService {
   }
 
   /**
-   * Checks if an email is registered as an Administrator in storage / database.
+   * Checks if an email is registered as an Administrator.
    */
   public async isAuthorizedAdminEmail(email: string): Promise<boolean> {
     const norm = this.normalizeEmail(email);
@@ -150,186 +131,20 @@ class RealEmailAuthService {
   }
 
   /**
-   * Cryptographic SHA-256 signature utility using Web Crypto API.
+   * Resolves the canonical action handler URL for password resets.
    */
-  private async createSignature(content: string): Promise<string> {
-    const enc = new TextEncoder();
-    const data = enc.encode(content + '.' + TOKEN_SECRET_SALT);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-      .slice(0, 32);
-  }
-
-  /**
-   * Generates a stateless, self-verifying cryptographic token that works universally
-   * across ANY device, phone, or browser without requiring shared database/localStorage.
-   */
-  public async generateStatelessToken(email: string, role: 'admin' | 'member'): Promise<string> {
-    const payload: StatelessTokenPayload = {
-      email: email.trim().toLowerCase(),
-      role,
-      iat: Date.now(),
-      exp: Date.now() + 60 * 60 * 1000, // 60 minutes validity
-      nonce: Math.random().toString(36).slice(2, 10),
-    };
-
-    const jsonStr = JSON.stringify(payload);
-    // Safe Base64URL encoding
-    const b64 = btoa(unescape(encodeURIComponent(jsonStr)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    const signature = await this.createSignature(b64);
-    return `hkm_${b64}.${signature}`;
-  }
-
-  /**
-   * Verifies a stateless cryptographic reset token.
-   */
-  public async verifyStatelessToken(tokenString: string): Promise<{
-    valid: boolean;
-    email?: string;
-    role?: 'admin' | 'member';
-    error?: string;
-  }> {
+  public getActionHandlerUrl(): string {
     try {
-      const clean = (tokenString || '').trim();
-      if (!clean.startsWith('hkm_') || !clean.includes('.')) {
-        return { valid: false, error: 'Invalid token structure.' };
-      }
-
-      const body = clean.slice(4);
-      const dotIndex = body.indexOf('.');
-      if (dotIndex === -1) {
-        return { valid: false, error: 'Invalid token format.' };
-      }
-
-      const b64 = body.slice(0, dotIndex);
-      const sig = body.slice(dotIndex + 1);
-
-      // 1. Verify cryptographic HMAC signature
-      const expectedSig = await this.createSignature(b64);
-      if (sig !== expectedSig) {
-        return { valid: false, error: 'Invalid or tampered reset token signature.' };
-      }
-
-      // 2. Decode payload
-      const jsonStr = decodeURIComponent(escape(atob(b64.replace(/-/g, '+').replace(/_/g, '/'))));
-      const payload: StatelessTokenPayload = JSON.parse(jsonStr);
-
-      // 3. Expiration check
-      if (Date.now() > payload.exp) {
-        return { valid: false, error: 'This password reset link has expired. Please request a new link.' };
-      }
-
-      // 4. Single-use consumed check
-      try {
-        const consumed = localStorage.getItem(CONSUMED_TOKENS_KEY);
-        if (consumed) {
-          const list: string[] = JSON.parse(consumed);
-          if (list.includes(sig)) {
-            return { valid: false, error: 'This password reset link has already been used.' };
-          }
-        }
-      } catch {
-        // Continue
-      }
-
-      return { valid: true, email: payload.email, role: payload.role };
+      const origin = window.location.origin;
+      const base = window.location.pathname.startsWith('/hikmah-library') ? '/hikmah-library' : '';
+      return `${origin}${base}/reset-password`;
     } catch {
-      return { valid: false, error: 'Unable to verify reset token.' };
+      return 'https://hikmah-library.vercel.app/reset-password';
     }
   }
 
   /**
-   * Stores a local fallback token for backwards compatibility.
-   */
-  private async storeLocalResetToken(
-    rawToken: string,
-    email: string,
-    role: 'admin' | 'member'
-  ): Promise<void> {
-    const rawCode = rawToken.slice(0, 8).toUpperCase();
-    const entry: LocalResetTokenEntry = {
-      tokenHash: rawToken,
-      rawCode,
-      email,
-      role,
-      expiresAt: Date.now() + 60 * 60 * 1000,
-      used: false,
-    };
-
-    try {
-      const existing = localStorage.getItem(LOCAL_RESET_TOKENS_KEY);
-      const list: LocalResetTokenEntry[] = existing ? JSON.parse(existing) : [];
-      const active = list.filter((t) => Date.now() < t.expiresAt);
-      active.push(entry);
-      localStorage.setItem(LOCAL_RESET_TOKENS_KEY, JSON.stringify(active));
-    } catch {
-      // Fallback
-    }
-  }
-
-  /**
-   * Resolves the canonical base URL (https://hikmah-library.vercel.app).
-   */
-  private getBaseUrl(): string {
-    try {
-      return window.location.origin;
-    } catch {
-      return 'https://hikmah-library.vercel.app';
-    }
-  }
-
-  /**
-   * Dispatches genuine outbound email via Web3Forms API.
-   * Works with 100% reliable inbox delivery across any network/device.
-   */
-  private async dispatchRealEmail(
-    email: string,
-    resetUrl: string,
-    role: 'admin' | 'member'
-  ): Promise<void> {
-    const roleName = role === 'admin' ? 'Administrator' : 'Student';
-    const emailBody = `
-Hikmah Library & Study Lounge — Password Reset
-
-Hello,
-You requested a password reset for your ${roleName} account (${email}).
-
-Reset Link:
-${resetUrl}
-
-Click the reset link above to set your new password. This link is valid for 60 minutes.
-If you did not request this password reset, you can safely ignore this message.
-
-— Hikmah Library Administration
-    `.trim();
-
-    try {
-      // Dispatch via Web3Forms (open, reliable transactional email gateway)
-      await fetch('https://api.web3forms.com/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          access_key: 'c7406a1a-3e5f-4740-97a7-5be3dfd8eb1a',
-          subject: `Hikmah Library — Password Reset Link for ${email}`,
-          from_name: 'Hikmah Library Support',
-          to: email,
-          email: email,
-          message: emailBody,
-        }),
-      }).catch(() => {});
-    } catch {
-      // Non-blocking
-    }
-  }
-
-  /**
-   * Sends a password reset email to an Administrator.
+   * Requests a password reset email for an Administrator via Firebase Authentication.
    */
   public async sendAdminResetEmail(email: string): Promise<EmailResetDispatchResult> {
     const norm = this.normalizeEmail(email);
@@ -346,49 +161,113 @@ If you did not request this password reset, you can safely ignore this message.
       };
     }
 
+    // Verify admin authorization
     const isAdmin = await this.isAuthorizedAdminEmail(norm.email);
-    const genericSuccess =
-      'If this email is registered, a password reset link has been sent. Please check your inbox and Spam folder.';
 
+    // Anti-enumeration protection: If email is not an authorized administrator,
+    // return standard success message to the user UI without dispatching an email.
     if (!isAdmin) {
       this.setCooldown(norm.email);
+      await DataService.addAuditLog(
+        'ADMIN_RESET_IGNORED',
+        'AUTH',
+        `Password reset requested for unauthorized administrator address (${norm.email}). Ignored safely.`,
+        'Security Engine'
+      );
       return {
         success: true,
         cooldownSeconds: 60,
-        message: genericSuccess,
+        message: GENERIC_RESET_SUCCESS_MESSAGE,
       };
     }
 
-    // Generate universal cross-device cryptographic token
-    const token = await this.generateStatelessToken(norm.email, 'admin');
-    const rawCode = token.slice(-8).toUpperCase();
-    await this.storeLocalResetToken(token, norm.email, 'admin');
-    this.setCooldown(norm.email);
+    // Verify Firebase Auth setup
+    if (!isFirebaseConfigured()) {
+      const configError =
+        'Firebase Authentication is not configured. Please add VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, and VITE_FIREBASE_PROJECT_ID to your environment variables to enable email password reset.';
+      await DataService.addAuditLog(
+        'AUTH_CONFIG_MISSING',
+        'AUTH',
+        `Admin password reset requested for ${norm.email}, but Firebase Auth configuration is missing.`,
+        'System'
+      );
+      return {
+        success: false,
+        error: configError,
+        message: configError,
+      };
+    }
 
-    const resetUrl = `${this.getBaseUrl()}/reset-password?oobCode=${encodeURIComponent(token)}`;
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      const authError = 'Authentication service is currently unavailable. Please try again later.';
+      return { success: false, error: authError, message: authError };
+    }
 
-    // Dispatch real email
-    await this.dispatchRealEmail(norm.email, resetUrl, 'admin');
-
-    await DataService.addAuditLog(
-      'ADMIN_PASSWORD_RESET',
-      'AUTH',
-      `Secure password reset link generated and dispatched to administrator (${norm.email}).`,
-      'System Security'
-    );
-
-    return {
-      success: true,
-      cooldownSeconds: 60,
-      message: genericSuccess,
-      resetUrl,
-      rawToken: token,
-      rawCode,
+    const actionCodeSettings: ActionCodeSettings = {
+      url: this.getActionHandlerUrl(),
+      handleCodeInApp: true,
     };
+
+    try {
+      await sendPasswordResetEmail(auth, norm.email, actionCodeSettings);
+      this.setCooldown(norm.email);
+
+      await DataService.addAuditLog(
+        'ADMIN_PASSWORD_RESET_DISPATCHED',
+        'AUTH',
+        `Official Firebase password reset email dispatched to administrator (${norm.email}).`,
+        'Chief Administrator Syed Absar'
+      );
+
+      return {
+        success: true,
+        cooldownSeconds: 60,
+        message: GENERIC_RESET_SUCCESS_MESSAGE,
+      };
+    } catch (err: any) {
+      console.error('Firebase sendPasswordResetEmail error:', err);
+      const code = err?.code || '';
+      let failureReason = 'Failed to dispatch password reset email. Please try again.';
+
+      if (code === 'auth/unauthorized-domain') {
+        failureReason =
+          'Domain not authorized: Please add this deployment domain to Firebase Console > Authentication > Settings > Authorized domains.';
+      } else if (code === 'auth/too-many-requests') {
+        failureReason = 'Too many requests. Please wait a few minutes before trying again.';
+      } else if (code === 'auth/user-not-found') {
+        // Maintain account enumeration safety if user has not yet been registered in Firebase Auth
+        this.setCooldown(norm.email);
+        await DataService.addAuditLog(
+          'ADMIN_RESET_USER_NOT_FOUND',
+          'AUTH',
+          `Admin ${norm.email} exists in directory/rules but not yet provisioned in Firebase Auth.`,
+          'Security Engine'
+        );
+        return {
+          success: true,
+          cooldownSeconds: 60,
+          message: GENERIC_RESET_SUCCESS_MESSAGE,
+        };
+      }
+
+      await DataService.addAuditLog(
+        'AUTH_PROVIDER_ERROR',
+        'AUTH',
+        `sendPasswordResetEmail failed for admin ${norm.email}: ${err?.message || code}`,
+        'System'
+      );
+
+      return {
+        success: false,
+        error: failureReason,
+        message: failureReason,
+      };
+    }
   }
 
   /**
-   * Sends a password reset email to a Member.
+   * Requests a password reset email for a Member via Firebase Authentication.
    */
   public async sendMemberResetEmail(email: string): Promise<EmailResetDispatchResult> {
     const norm = this.normalizeEmail(email);
@@ -405,114 +284,176 @@ If you did not request this password reset, you can safely ignore this message.
       };
     }
 
+    // Verify member exists in library directory
     const isMember = await this.isAuthorizedMemberEmail(norm.email);
-    const genericSuccess =
-      'If this email is registered, a password reset link has been sent. Please check your inbox and Spam folder.';
 
+    // Anti-enumeration protection: If email is not registered in the directory,
+    // return standard success message without dispatching an email.
     if (!isMember) {
       this.setCooldown(norm.email);
+      await DataService.addAuditLog(
+        'MEMBER_RESET_IGNORED',
+        'AUTH',
+        `Password reset requested for unregistered member address (${norm.email}). Ignored safely.`,
+        'Security Engine'
+      );
       return {
         success: true,
         cooldownSeconds: 60,
-        message: genericSuccess,
+        message: GENERIC_RESET_SUCCESS_MESSAGE,
       };
     }
 
-    // Generate universal cross-device cryptographic token
-    const token = await this.generateStatelessToken(norm.email, 'member');
-    const rawCode = token.slice(-8).toUpperCase();
-    await this.storeLocalResetToken(token, norm.email, 'member');
-    this.setCooldown(norm.email);
+    // Verify Firebase Auth setup
+    if (!isFirebaseConfigured()) {
+      const configError =
+        'Firebase Authentication is not configured. Please add VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, and VITE_FIREBASE_PROJECT_ID to environment variables to enable email password reset.';
+      await DataService.addAuditLog(
+        'AUTH_CONFIG_MISSING',
+        'AUTH',
+        `Member password reset requested for ${norm.email}, but Firebase Auth configuration is missing.`,
+        'System'
+      );
+      return {
+        success: false,
+        error: configError,
+        message: configError,
+      };
+    }
 
-    const resetUrl = `${this.getBaseUrl()}/reset-password?oobCode=${encodeURIComponent(token)}`;
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      const authError = 'Authentication service is currently unavailable. Please try again later.';
+      return { success: false, error: authError, message: authError };
+    }
 
-    // Dispatch real email
-    await this.dispatchRealEmail(norm.email, resetUrl, 'member');
-
-    await DataService.addAuditLog(
-      'MEMBER_PASSWORD_RESET',
-      'AUTH',
-      `Password reset link dispatched to member email (${norm.email}).`,
-      'System Security'
-    );
-
-    return {
-      success: true,
-      cooldownSeconds: 60,
-      message: genericSuccess,
-      resetUrl,
-      rawToken: token,
-      rawCode,
+    const actionCodeSettings: ActionCodeSettings = {
+      url: this.getActionHandlerUrl(),
+      handleCodeInApp: true,
     };
+
+    try {
+      await sendPasswordResetEmail(auth, norm.email, actionCodeSettings);
+      this.setCooldown(norm.email);
+
+      await DataService.addAuditLog(
+        'MEMBER_PASSWORD_RESET_DISPATCHED',
+        'AUTH',
+        `Official Firebase password reset email dispatched to student member (${norm.email}).`,
+        'Self Service'
+      );
+
+      return {
+        success: true,
+        cooldownSeconds: 60,
+        message: GENERIC_RESET_SUCCESS_MESSAGE,
+      };
+    } catch (err: any) {
+      console.error('Firebase sendPasswordResetEmail error:', err);
+      const code = err?.code || '';
+      let failureReason = 'Failed to dispatch password reset email. Please try again.';
+
+      if (code === 'auth/unauthorized-domain') {
+        failureReason =
+          'Domain not authorized: Please add this deployment domain to Firebase Console > Authentication > Settings > Authorized domains.';
+      } else if (code === 'auth/too-many-requests') {
+        failureReason = 'Too many requests. Please wait a few minutes before trying again.';
+      } else if (code === 'auth/user-not-found') {
+        // Anti-enumeration safe response for user not in Firebase Auth yet
+        this.setCooldown(norm.email);
+        await DataService.addAuditLog(
+          'MEMBER_RESET_USER_NOT_FOUND',
+          'AUTH',
+          `Member ${norm.email} exists in directory but account has not been activated in Firebase Auth.`,
+          'Security Engine'
+        );
+        return {
+          success: true,
+          cooldownSeconds: 60,
+          message: GENERIC_RESET_SUCCESS_MESSAGE,
+        };
+      }
+
+      await DataService.addAuditLog(
+        'AUTH_PROVIDER_ERROR',
+        'AUTH',
+        `sendPasswordResetEmail failed for member ${norm.email}: ${err?.message || code}`,
+        'System'
+      );
+
+      return {
+        success: false,
+        error: failureReason,
+        message: failureReason,
+      };
+    }
   }
 
   /**
-   * Verifies a password reset code or URL token.
-   * Works 100% reliably across any device.
+   * Verifies a Firebase action code (`oobCode`) from the reset email link.
+   * Works across any browser or device independently with zero local storage requirements.
    */
   public async verifyResetCode(code: string): Promise<VerifyCodeResult> {
     const trimmed = (code || '').trim();
     if (!trimmed) {
-      return { success: false, error: 'Please provide a valid reset code or token.' };
+      return { success: false, error: 'Please provide a valid password reset action code.' };
     }
 
-    // 1. Check stateless cryptographic token (Universal across all devices!)
-    if (trimmed.startsWith('hkm_')) {
-      const stateRes = await this.verifyStatelessToken(trimmed);
-      if (stateRes.valid && stateRes.email) {
-        return { success: true, email: stateRes.email, role: stateRes.role };
-      }
+    if (!isFirebaseConfigured()) {
       return {
         success: false,
-        error: stateRes.error || 'The password reset link is invalid, expired, or has already been used.',
+        error: 'Firebase Authentication is not configured in this environment.',
       };
     }
 
-    // 2. Check Firebase Auth if live
-    if (isFirebaseConfigured()) {
-      const auth = getFirebaseAuth();
-      if (auth) {
-        try {
-          const email = await verifyPasswordResetCode(auth, trimmed);
-          return { success: true, email };
-        } catch {
-          // Fall through
-        }
-      }
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      return { success: false, error: 'Authentication service is currently unavailable.' };
     }
 
-    // 3. Check legacy local storage entries
     try {
-      const existing = localStorage.getItem(LOCAL_RESET_TOKENS_KEY);
-      if (existing) {
-        const list: LocalResetTokenEntry[] = JSON.parse(existing);
-        const entry = list.find(
-          (t) =>
-            t.tokenHash === trimmed ||
-            (t.rawCode && t.rawCode.toUpperCase() === trimmed.toUpperCase())
-        );
-        if (entry) {
-          if (entry.used) {
-            return { success: false, error: 'This password reset link has already been used.' };
-          }
-          if (Date.now() > entry.expiresAt) {
-            return { success: false, error: 'This password reset link has expired. Please request a new one.' };
-          }
-          return { success: true, email: entry.email, role: entry.role };
-        }
+      const email = await verifyPasswordResetCode(auth, trimmed);
+      const isAdmin = await this.isAuthorizedAdminEmail(email);
+      return {
+        success: true,
+        email,
+        role: isAdmin ? 'admin' : 'member',
+      };
+    } catch (err: any) {
+      const errCode = err?.code || '';
+      if (errCode === 'auth/expired-action-code') {
+        return {
+          success: false,
+          error: 'This password reset link has expired. Password reset links are valid for a limited time. Please request a new link.',
+        };
       }
-    } catch {
-      // Fallback
+      if (errCode === 'auth/invalid-action-code') {
+        return {
+          success: false,
+          error: 'This password reset link is invalid or has already been used. Please request a new link from the login page.',
+        };
+      }
+      if (errCode === 'auth/user-disabled') {
+        return {
+          success: false,
+          error: 'This account has been disabled. Please contact library administration.',
+        };
+      }
+      if (errCode === 'auth/user-not-found') {
+        return {
+          success: false,
+          error: 'The user account associated with this reset link was not found.',
+        };
+      }
+      return {
+        success: false,
+        error: err?.message || 'Unable to verify password reset link. Please request a new one.',
+      };
     }
-
-    return {
-      success: false,
-      error: 'The password reset link is invalid, expired, or has already been used.',
-    };
   }
 
   /**
-   * Confirms the password reset and updates credentials for Admin or Member.
+   * Confirms the password reset in Firebase Authentication and updates directory records.
    */
   public async confirmPasswordReset(
     oobCode: string,
@@ -521,22 +462,34 @@ If you did not request this password reset, you can safely ignore this message.
   ): Promise<ConfirmResetResult> {
     const trimmedCode = (oobCode || '').trim();
     if (!trimmedCode) {
-      return { success: false, error: 'Missing reset action code.' };
+      return { success: false, error: 'Missing password reset action code.' };
     }
 
     if (newPassword !== confirmPassword) {
-      return { success: false, error: 'Passwords do not match.' };
+      return { success: false, error: 'Passwords do not match. Please ensure both fields are identical.' };
     }
 
     const policy = validatePasswordPolicy(newPassword);
     if (!policy.valid) {
       return {
         success: false,
-        error: policy.errors[0] || 'Password does not meet security requirements (min 8 chars).',
+        error: policy.errors[0] || 'Password does not meet security requirements (min 8 characters).',
       };
     }
 
-    // 1. Verify token to get target email and role
+    if (!isFirebaseConfigured()) {
+      return {
+        success: false,
+        error: 'Firebase Authentication is not configured in this environment.',
+      };
+    }
+
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      return { success: false, error: 'Authentication service is currently unavailable.' };
+    }
+
+    // 1. Verify code to obtain target email and role
     const verifyRes = await this.verifyResetCode(trimmedCode);
     if (!verifyRes.success || !verifyRes.email) {
       return {
@@ -548,7 +501,36 @@ If you did not request this password reset, you can safely ignore this message.
     const targetEmail = verifyRes.email.toLowerCase();
     const role = verifyRes.role || (await this.isAuthorizedAdminEmail(targetEmail) ? 'admin' : 'member');
 
-    // 2. Commit updated password
+    // 2. Commit the new password in Firebase Authentication (Single Source of Truth)
+    try {
+      await fbConfirmPasswordReset(auth, trimmedCode, newPassword);
+    } catch (err: any) {
+      const errCode = err?.code || '';
+      if (errCode === 'auth/expired-action-code') {
+        return {
+          success: false,
+          error: 'This password reset link has expired. Please request a fresh reset link.',
+        };
+      }
+      if (errCode === 'auth/invalid-action-code') {
+        return {
+          success: false,
+          error: 'This password reset link is invalid or has already been used.',
+        };
+      }
+      if (errCode === 'auth/weak-password') {
+        return {
+          success: false,
+          error: 'The password chosen is too weak according to authentication rules.',
+        };
+      }
+      return {
+        success: false,
+        error: err?.message || 'Failed to update password in Firebase Authentication.',
+      };
+    }
+
+    // 3. Keep local directory records and credentials cache synchronized
     if (role === 'admin' || targetEmail === OFFICIAL_ADMIN_EMAIL.toLowerCase()) {
       try {
         let creds: any = {};
@@ -567,31 +549,18 @@ If you did not request this password reset, you can safely ignore this message.
       await DataService.addAuditLog(
         'ADMIN_PASSWORD_RESET',
         'AUTH',
-        `Administrator (${targetEmail}) successfully updated password via verified email link.`,
+        `Administrator (${targetEmail}) successfully updated password via verified Firebase email link.`,
         'Chief Administrator Syed Absar'
       );
     } else {
-      // Member password update
+      // Sync member directory record
       await DataService.updateMemberPasswordByEmail(targetEmail, newPassword);
       await DataService.addAuditLog(
         'MEMBER_PASSWORD_RESET',
         'AUTH',
-        `Student member (${targetEmail}) successfully reset password via verified email link.`,
+        `Student member (${targetEmail}) successfully updated password via verified Firebase email link.`,
         'Self Service'
       );
-    }
-
-    // 3. Mark token as consumed so it cannot be re-used
-    try {
-      const consumed = localStorage.getItem(CONSUMED_TOKENS_KEY);
-      const list: string[] = consumed ? JSON.parse(consumed) : [];
-      const sig = trimmedCode.includes('.') ? trimmedCode.split('.')[1] : trimmedCode;
-      if (!list.includes(sig)) {
-        list.push(sig);
-        localStorage.setItem(CONSUMED_TOKENS_KEY, JSON.stringify(list));
-      }
-    } catch {
-      // Fallback
     }
 
     return {

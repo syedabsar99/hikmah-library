@@ -8,9 +8,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  ShieldCheck,
   ArrowLeft,
   KeyRound,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface ResetPasswordProps {
@@ -20,9 +20,9 @@ interface ResetPasswordProps {
 export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
   const [oobCode, setOobCode] = useState<string>('');
   const [targetEmail, setTargetEmail] = useState<string>('');
+  const [targetRole, setTargetRole] = useState<'admin' | 'member'>('member');
   const [verifyingCode, setVerifyingCode] = useState<boolean>(true);
   const [codeError, setCodeError] = useState<string | null>(null);
-  const [manualCode, setManualCode] = useState<string>('');
 
   // Form states
   const [newPassword, setNewPassword] = useState<string>('');
@@ -33,51 +33,54 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
 
-  const verifyCodeString = (codeToVerify: string) => {
-    const trimmed = (codeToVerify || '').trim();
-    if (!trimmed) {
+  // Parse and verify oobCode and mode on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('oobCode') || params.get('code') || '';
+    const mode = params.get('mode') || 'resetPassword';
+
+    if (mode !== 'resetPassword' && mode !== '') {
       setVerifyingCode(false);
-      setCodeError('Please enter the 8-character verification code or password reset token.');
+      setCodeError(
+        mode === 'verifyEmail'
+          ? 'This link is for email address verification, not password reset.'
+          : `Unsupported authentication action: ${mode}.`
+      );
       return;
     }
 
+    if (!code) {
+      setVerifyingCode(false);
+      setCodeError(
+        'No password reset action code detected. Please open the link sent directly to your email inbox, or request a new reset link.'
+      );
+      return;
+    }
+
+    setOobCode(code);
     setVerifyingCode(true);
     setCodeError(null);
 
-    RealEmailAuth.verifyResetCode(trimmed)
+    RealEmailAuth.verifyResetCode(code)
       .then((res) => {
         if (res.success && res.email) {
-          setOobCode(trimmed);
           setTargetEmail(res.email);
+          setTargetRole(res.role || 'member');
           setCodeError(null);
         } else {
           setCodeError(
-            res.error || 'The password reset link/code is invalid, expired, or has already been used.'
+            res.error || 'The password reset link is invalid, expired, or has already been used.'
           );
         }
       })
       .catch((err) => {
         setCodeError(
-          err?.message || 'Failed to verify security token. Please request a new password reset link.'
+          err?.message || 'Failed to verify reset code. Please request a new password reset email.'
         );
       })
       .finally(() => {
         setVerifyingCode(false);
       });
-  };
-
-  // Parse and verify oobCode on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('oobCode') || params.get('code') || '';
-    if (code) {
-      setOobCode(code);
-      verifyCodeString(code);
-    } else {
-      setVerifyingCode(false);
-      // Don't show hard error immediately if user navigated directly without query param
-      setCodeError(null);
-    }
   }, []);
 
   const passwordPolicy = validatePasswordPolicy(newPassword);
@@ -88,14 +91,14 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
     setSubmitError(null);
 
     if (!oobCode) {
-      setSubmitError('Missing security reset code.');
+      setSubmitError('Missing password reset action code.');
       return;
     }
 
     if (!passwordPolicy.valid) {
       setSubmitError(
         passwordPolicy.errors[0] ||
-          'Password does not meet the minimum security requirements (at least 8 characters).'
+          'Password does not meet security requirements (min 8 characters).'
       );
       return;
     }
@@ -118,6 +121,11 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const navigateToLogin = () => {
+    window.history.pushState(null, '', targetRole === 'admin' ? '/admin/login' : '/student/login');
+    onNavigate(targetRole === 'admin' ? 'admin-login' : 'member-login');
   };
 
   return (
@@ -160,7 +168,7 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
             cursor: 'pointer',
           }}
         >
-          <ArrowLeft size={16} /> Return to Main Website
+          <ArrowLeft size={16} /> Return to Home
         </button>
 
         {/* Header */}
@@ -184,14 +192,14 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
           </div>
 
           <h2 style={{ color: '#FFFFFF', fontSize: '1.5rem', fontWeight: '800', marginBottom: '6px' }}>
-            {isSuccess ? 'Password Reset Successful' : 'Set New Secure Password'}
+            {isSuccess ? 'Password Reset Complete' : 'Set New Secure Password'}
           </h2>
           <p style={{ color: '#94A3B8', fontSize: '0.85rem', margin: 0 }}>
             {isSuccess
-              ? 'Your password has been successfully updated.'
+              ? 'Your account password has been successfully updated.'
               : targetEmail
-              ? `Resetting credentials for ${targetEmail}`
-              : 'Hikmah Library Cryptographic Password Reset'}
+              ? `Configuring password for ${targetEmail}`
+              : 'Hikmah Library Official Password Reset'}
           </p>
         </div>
 
@@ -210,103 +218,53 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
           >
             <RefreshCw size={28} className="spin" style={{ color: 'var(--accent-gold)' }} />
             <div style={{ fontSize: '0.92rem', fontWeight: '600' }}>
-              Verifying security link with Authentication Engine...
+              Verifying link with Authentication Service...
             </div>
             <div style={{ fontSize: '0.78rem', color: '#94A3B8' }}>
-              Checking token validity and single-use signature.
+              Confirming action code validity and single-use status.
             </div>
           </div>
         )}
 
-        {/* MANUAL CODE ENTRY / ERROR STATE */}
+        {/* INVALID / EXPIRED / MISSING CODE STATE */}
         {!verifyingCode && (!targetEmail || codeError) && !isSuccess && (
           <div style={{ padding: '6px 0 16px 0' }}>
-            {codeError && (
-              <div
-                style={{
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid #EF4444',
-                  color: '#FCA5A5',
-                  padding: '14px 16px',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '0.85rem',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  textAlign: 'left',
-                  lineHeight: '1.5',
-                }}
-              >
-                <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#EF4444' }} />
-                <div>{codeError}</div>
-              </div>
-            )}
-
             <div
               style={{
-                background: 'rgba(212, 175, 55, 0.08)',
-                border: '1px solid rgba(212, 175, 55, 0.3)',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #EF4444',
+                color: '#FCA5A5',
+                padding: '14px 16px',
                 borderRadius: 'var(--radius-md)',
-                padding: '18px 16px',
+                fontSize: '0.85rem',
                 marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
                 textAlign: 'left',
+                lineHeight: '1.5',
               }}
             >
-              <label
-                style={{
-                  display: 'block',
-                  color: '#F8FAFC',
-                  fontSize: '0.88rem',
-                  fontWeight: '700',
-                  marginBottom: '8px',
-                }}
-              >
-                Enter Verification Code or Security Link
-              </label>
-              <p style={{ color: '#94A3B8', fontSize: '0.78rem', marginBottom: '12px', lineHeight: '1.4' }}>
-                Check the email dispatched to your inbox. Enter the 8-character Verification Code (or paste the reset code/link) below:
-              </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  placeholder="e.g. 8A3F9B2C or paste code"
-                  style={{
-                    flex: 1,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    fontWeight: '700',
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      verifyCodeString(manualCode);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="btn-gold"
-                  onClick={() => verifyCodeString(manualCode)}
-                  style={{ padding: '10px 16px', fontSize: '0.86rem', whiteSpace: 'nowrap' }}
-                >
-                  Verify Code
-                </button>
+              <AlertTriangle size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#EF4444' }} />
+              <div>
+                <strong style={{ display: 'block', color: '#FFFFFF', marginBottom: '3px' }}>
+                  Action Required
+                </strong>
+                {codeError || 'This password reset link is invalid, expired, or has already been used.'}
               </div>
             </div>
 
-            <div style={{ textAlign: 'center', marginTop: '16px' }}>
-              <button
-                onClick={() => onNavigate('member-login')}
-                className="btn-outline"
-                style={{ width: '100%', padding: '10px', fontSize: '0.88rem' }}
-              >
-                Request a Fresh Reset Email
-              </button>
-            </div>
+            <p style={{ color: '#94A3B8', fontSize: '0.82rem', marginBottom: '20px', lineHeight: '1.5', textAlign: 'center' }}>
+              Password reset links can only be used once and expire for your security. Please return to the sign-in page to request a fresh password reset email.
+            </p>
+
+            <button
+              onClick={navigateToLogin}
+              className="btn-gold"
+              style={{ width: '100%', padding: '12px', fontSize: '0.92rem', fontWeight: '700' }}
+            >
+              Return to Sign In & Request Reset
+            </button>
           </div>
         )}
 
@@ -348,104 +306,76 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
                 gap: '8px',
               }}
             >
-              <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-              <span>Token verified for: <strong style={{ color: '#FFFFFF' }}>{targetEmail}</strong></span>
+              <ShieldCheck size={18} style={{ color: '#10B981', flexShrink: 0 }} />
+              <span>
+                Verified identity for: <strong>{targetEmail}</strong> ({targetRole === 'admin' ? 'Administrator' : 'Student Member'})
+              </span>
             </div>
 
-            {/* New Password Input */}
+            {/* New Password */}
             <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label className="form-label" style={{ color: '#E2E8F0', fontSize: '0.85rem' }}>
+              <label className="form-label" style={{ color: '#E2E8F0', fontSize: '0.86rem' }}>
                 New Password
               </label>
               <div style={{ position: 'relative' }}>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  className="form-input input-with-icon-left"
+                  className="form-input input-with-icon-left input-with-icon-right"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter password here"
+                  placeholder="Enter new password"
+                  required
+                  autoFocus
                   style={{
-                    paddingRight: '44px',
                     background: 'rgba(255, 255, 255, 0.08)',
                     borderColor: 'rgba(255, 255, 255, 0.2)',
                     color: '#FFFFFF',
                   }}
-                  required
-                  autoFocus
-                  autoComplete="new-password"
                 />
-                <Lock
-                  size={16}
-                  className="form-icon-left"
-                />
+                <Lock size={18} className="form-icon-left" />
                 <button
                   type="button"
+                  className="form-icon-right"
                   onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#94A3B8',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            {/* Confirm Password Input */}
+            {/* Confirm New Password */}
             <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label className="form-label" style={{ color: '#E2E8F0', fontSize: '0.85rem' }}>
+              <label className="form-label" style={{ color: '#E2E8F0', fontSize: '0.86rem' }}>
                 Confirm New Password
               </label>
               <div style={{ position: 'relative' }}>
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
-                  className="form-input input-with-icon-left"
+                  className="form-input input-with-icon-left input-with-icon-right"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Enter password again to confirm"
+                  placeholder="Confirm new password"
+                  required
                   style={{
-                    paddingRight: '44px',
                     background: 'rgba(255, 255, 255, 0.08)',
                     borderColor: 'rgba(255, 255, 255, 0.2)',
                     color: '#FFFFFF',
                   }}
-                  required
-                  autoComplete="new-password"
                 />
-                <Lock
-                  size={16}
-                  className="form-icon-left"
-                />
+                <Lock size={18} className="form-icon-left" />
                 <button
                   type="button"
+                  className="form-icon-right"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#94A3B8',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
                 >
-                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            {/* Password Policy Live Requirements Checklist */}
+            {/* Password Policy Checks */}
             <div
               style={{
                 marginBottom: '20px',
@@ -501,7 +431,7 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
             >
               {submitting ? (
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <RefreshCw size={16} className="spin" /> Updating Password in Firebase...
+                  <RefreshCw size={16} className="spin" /> Updating Password in Authentication Service...
                 </span>
               ) : (
                 'Save New Password'
@@ -536,52 +466,26 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigate }) => {
             </h3>
 
             <p style={{ color: '#E2E8F0', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '26px' }}>
-              Your password has been successfully verified and updated. Your old password is no longer valid.
+              Your password has been successfully verified and updated in Firebase Authentication. Your old password is no longer valid.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button
-                onClick={() => {
-                  window.history.pushState(null, '', '/');
-                  onNavigate('home');
-                }}
-                className="btn-gold"
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  fontSize: '1rem',
-                  fontWeight: '700',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 15px rgba(212, 175, 55, 0.4)',
-                }}
-              >
-                Go back to main website
-              </button>
-
-              <button
-                onClick={() => {
-                  window.history.pushState(null, '', '/admin/login');
-                  onNavigate('admin-login');
-                }}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  fontSize: '0.92rem',
-                  fontWeight: '600',
-                  color: 'var(--accent-gold)',
-                  background: 'rgba(212, 175, 55, 0.1)',
-                  border: '1px solid rgba(212, 175, 55, 0.3)',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                Sign In with New Password
-              </button>
-            </div>
+            <button
+              onClick={navigateToLogin}
+              className="btn-gold"
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: '1rem',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 15px rgba(212, 175, 55, 0.4)',
+              }}
+            >
+              Sign In with New Password →
+            </button>
           </div>
         )}
       </div>

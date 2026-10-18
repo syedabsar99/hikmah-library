@@ -3,6 +3,12 @@ import type { CurrentUser, MemberProfile } from '../types';
 import { DataService } from '../services/dataService';
 import { OtpService } from '../services/otpService';
 import { validatePasswordPolicy } from '../utils/validation';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import { getFirebaseAuth, isFirebaseConfigured } from '../services/firebase';
 
 interface AuthContextType {
   currentUser: CurrentUser | null;
@@ -206,8 +212,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    if (password !== storedCreds.password) {
-      return { success: false, error: 'Incorrect administrator password.' };
+    // Authenticate with Firebase Auth if configured
+    const auth = getFirebaseAuth();
+    if (auth && isFirebaseConfigured()) {
+      try {
+        await signInWithEmailAndPassword(auth, storedEmail, password);
+      } catch (err: any) {
+        const errCode = err?.code || '';
+        if (errCode === 'auth/user-not-found') {
+          // If admin has not yet been registered in Firebase Auth, but matches stored credentials,
+          // auto-provision them into Firebase Auth so future resets and logins use Firebase Auth seamlessly
+          if (password === storedCreds.password) {
+            try {
+              await createUserWithEmailAndPassword(auth, storedEmail, password);
+            } catch (createErr) {
+              console.warn('Auto-provisioning admin into Firebase Auth warning:', createErr);
+            }
+          } else {
+            return { success: false, error: 'Incorrect administrator password.' };
+          }
+        } else if (errCode === 'auth/wrong-password' || errCode === 'auth/invalid-credential') {
+          return { success: false, error: 'Incorrect administrator password.' };
+        } else {
+          // Network issue: fallback check against stored creds
+          if (password !== storedCreds.password) {
+            return { success: false, error: 'Incorrect administrator password.' };
+          }
+        }
+      }
+    } else {
+      if (password !== storedCreds.password) {
+        return { success: false, error: 'Incorrect administrator password.' };
+      }
     }
 
     const adminUser: CurrentUser = {
@@ -308,21 +344,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Password / Passcode verification strictly against member's registered password
-    if (!member.passcode) {
-      return {
-        success: false,
-        error: 'No password has been configured for this student account yet. Please switch to "New Student? Activate Account / Set Password" to configure your portal access.',
-      };
-    }
-
-    if (passcode.trim() !== member.passcode) {
-      return {
-        success: false,
-        error: 'Incorrect password for this student account. Use "Forgot Password? Reset via Email Link" to set a new password.',
-      };
-    }
-
     // Check account status
     if (member.membershipStatus === 'Cancelled') {
       return {
@@ -336,6 +357,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         success: false,
         error: 'Account Suspended: Your access has been temporarily restricted. Please visit the front desk.',
       };
+    }
+
+    // Password verification with Firebase Auth if configured
+    const auth = getFirebaseAuth();
+    if (auth && isFirebaseConfigured()) {
+      try {
+        const userCred = await signInWithEmailAndPassword(auth, member.email, passcode.trim());
+        if (userCred.user.uid && member.uid !== userCred.user.uid) {
+          await DataService.updateMember(member.id, { uid: userCred.user.uid }, 'Sync Firebase Auth UID');
+        }
+      } catch (err: any) {
+        const errCode = err?.code || '';
+        if (errCode === 'auth/user-not-found') {
+          // If student has a configured passcode in directory, auto-provision in Firebase Auth
+          if (member.passcode && member.passcode === passcode.trim()) {
+            try {
+              const newCred = await createUserWithEmailAndPassword(auth, member.email, passcode.trim());
+              await DataService.updateMember(member.id, { uid: newCred.user.uid }, 'Auto-provision Firebase Auth Account');
+            } catch (createErr) {
+              console.warn('Auto-provisioning member into Firebase Auth warning:', createErr);
+            }
+          } else {
+            return {
+              success: false,
+              error: 'Incorrect password for this student account. Use "Forgot Password? Reset via Email Link" to set a new password.',
+            };
+          }
+        } else if (errCode === 'auth/wrong-password' || errCode === 'auth/invalid-credential') {
+          return {
+            success: false,
+            error: 'Incorrect password for this student account. Use "Forgot Password? Reset via Email Link" to set a new password.',
+          };
+        } else {
+          // Offline / network fallback
+          if (!member.passcode || passcode.trim() !== member.passcode) {
+            return {
+              success: false,
+              error: 'Incorrect password for this student account.',
+            };
+          }
+        }
+      }
+    } else {
+      if (!member.passcode) {
+        return {
+          success: false,
+          error: 'No password has been configured for this student account yet. Please switch to "New Student? Activate Account / Set Password" to configure your portal access.',
+        };
+      }
+      if (passcode.trim() !== member.passcode) {
+        return {
+          success: false,
+          error: 'Incorrect password for this student account. Use "Forgot Password? Reset via Email Link" to set a new password.',
+        };
+      }
     }
 
     const user: CurrentUser = {
@@ -363,6 +439,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    const auth = getFirebaseAuth();
+    if (auth && isFirebaseConfigured()) {
+      signOut(auth).catch(() => {});
+    }
     if (currentUser) {
       DataService.addAuditLog(
         'LOGOUT',

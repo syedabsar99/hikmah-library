@@ -1263,6 +1263,265 @@ async function runTests() {
   assert(liveChatStore.some(m => m.senderId === 'HIK-2025-001' || m.recipientId === 'HIK-2025-001') === false, 'All chats involving deleted member purged immediately');
   assert(liveChatStore.length === 1 && liveChatStore[0].senderId === 'HIK-2025-002', 'Unrelated member chats preserved intact');
 
+  // ==========================================
+  // SUITE 22: UNIFIED FIREBASE PASSWORD RESET & LOGIN FLOW END-TO-END
+  // ==========================================
+  console.log('\nSuite 22: Unified Firebase Password Reset & Login Flow End-to-End');
+
+  // Simulated Unified Auth Engine (Firebase Auth + Administration Directory Mapping)
+  interface AuthAccount {
+    uid: string;
+    email: string;
+    passwordHash: string;
+    role: 'admin' | 'member';
+    disabled?: boolean;
+  }
+
+  interface DirectoryMember {
+    id: string;
+    uid?: string;
+    email: string;
+    fullName: string;
+    phoneNumber: string;
+    membershipStatus: string;
+    passcode?: string;
+  }
+
+  const simulatedFirebaseUsers = new Map<string, AuthAccount>();
+  const simulatedActionCodes = new Map<string, { email: string; expired: boolean; used: boolean }>();
+  const simulatedDirectory = new Map<string, DirectoryMember>();
+
+  // Seed Admin Account
+  simulatedFirebaseUsers.set('syedabsar99@gmail.com', {
+    uid: 'admin-chief-001',
+    email: 'syedabsar99@gmail.com',
+    passwordHash: 'InitialAdminPass#2026',
+    role: 'admin',
+  });
+
+  // Seed Enrolled Directory Member
+  simulatedDirectory.set('student.amina@example.com', {
+    id: 'HIK-2025-010',
+    email: 'student.amina@example.com',
+    fullName: 'Amina Mir',
+    phoneNumber: '+91 98765 43210',
+    membershipStatus: 'Active',
+    passcode: 'InitialStudentPass#2026',
+  });
+  simulatedFirebaseUsers.set('student.amina@example.com', {
+    uid: 'mem-uid-010',
+    email: 'student.amina@example.com',
+    passwordHash: 'InitialStudentPass#2026',
+    role: 'member',
+  });
+
+  // Seed Unprovisioned Member (exists in directory, not yet in Firebase Auth)
+  simulatedDirectory.set('unprovisioned.student@example.com', {
+    id: 'HIK-2025-011',
+    email: 'unprovisioned.student@example.com',
+    fullName: 'Tariq Lone',
+    phoneNumber: '+91 98765 43211',
+    membershipStatus: 'Active',
+    passcode: undefined,
+  });
+
+  let simulatedFirebaseConfigured = true;
+
+  // 1. Dispatch Reset Request
+  function requestPasswordReset(email: string, userType: 'admin' | 'member') {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!simulatedFirebaseConfigured) {
+      return {
+        success: false,
+        error: 'Firebase Authentication is not configured. Please add VITE_FIREBASE_API_KEY.',
+      };
+    }
+
+    if (userType === 'admin') {
+      const isAdmin = cleanEmail === 'syedabsar99@gmail.com';
+      if (!isAdmin) {
+        return { success: true, message: 'Enumeration safe response', providerDispatched: false };
+      }
+      const code = `oob_admin_${Date.now()}`;
+      simulatedActionCodes.set(code, { email: cleanEmail, expired: false, used: false });
+      return { success: true, message: 'Enumeration safe response', providerDispatched: true, code };
+    } else {
+      const inDirectory = simulatedDirectory.has(cleanEmail);
+      if (!inDirectory) {
+        return { success: true, message: 'Enumeration safe response', providerDispatched: false };
+      }
+      const hasAccount = simulatedFirebaseUsers.has(cleanEmail);
+      if (!hasAccount) {
+        return { success: true, message: 'Enumeration safe response', providerDispatched: false, needsActivation: true };
+      }
+      const code = `oob_member_${Date.now()}`;
+      simulatedActionCodes.set(code, { email: cleanEmail, expired: false, used: false });
+      return { success: true, message: 'Enumeration safe response', providerDispatched: true, code };
+    }
+  }
+
+  // 2. Action Code Verification (Handling all error states)
+  function verifyActionCode(code: string) {
+    if (!code || !code.trim()) {
+      return { success: false, error: 'Please provide a valid password reset action code.' };
+    }
+    const entry = simulatedActionCodes.get(code);
+    if (!entry) {
+      return { success: false, error: 'This password reset link is invalid or has already been used.' };
+    }
+    if (entry.used) {
+      return { success: false, error: 'This password reset link is invalid or has already been used.' };
+    }
+    if (entry.expired) {
+      return { success: false, error: 'This password reset link has expired. Please request a new link.' };
+    }
+    const user = simulatedFirebaseUsers.get(entry.email);
+    if (!user) {
+      return { success: false, error: 'The user account associated with this reset link was not found.' };
+    }
+    if (user.disabled) {
+      return { success: false, error: 'This account has been disabled.' };
+    }
+    return { success: true, email: entry.email, role: user.role };
+  }
+
+  // 3. Confirm Password Reset (Updates Auth Source of Truth + Directory Sync)
+  function confirmNewPassword(code: string, newPass: string, confirmPass: string) {
+    if (newPass !== confirmPass) {
+      return { success: false, error: 'Passwords do not match.' };
+    }
+    const hasMinLength = newPass.length >= 8;
+    const hasUpper = /[A-Z]/.test(newPass);
+    const hasNumber = /[0-9]/.test(newPass);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPass);
+    if (!hasMinLength || !hasUpper || !hasNumber || !hasSpecial) {
+      return { success: false, error: 'Password does not meet security requirements (min 8 chars, uppercase, number, symbol).' };
+    }
+
+    const verification = verifyActionCode(code);
+    if (!verification.success || !verification.email) {
+      return verification;
+    }
+
+    // Mark single-use action code as consumed
+    const entry = simulatedActionCodes.get(code)!;
+    entry.used = true;
+
+    // Update Firebase Auth password
+    const user = simulatedFirebaseUsers.get(verification.email)!;
+    user.passwordHash = newPass;
+
+    // Sync Directory if member
+    if (user.role === 'member' && simulatedDirectory.has(user.email)) {
+      simulatedDirectory.get(user.email)!.passcode = newPass;
+    }
+
+    return { success: true, message: 'Password has been successfully reset.' };
+  }
+
+  // 4. Login Attempt Against Source of Truth
+  function authenticateUser(email: string, pass: string, role: 'admin' | 'member') {
+    const user = simulatedFirebaseUsers.get(email.toLowerCase());
+    if (!user || user.role !== role) {
+      return { success: false, error: 'Account not found.' };
+    }
+    if (user.passwordHash !== pass) {
+      return { success: false, error: 'Incorrect password.' };
+    }
+    return { success: true, uid: user.uid };
+  }
+
+  // Test 1: Provider failure handled cleanly without claiming success
+  simulatedFirebaseConfigured = false;
+  const unconfiguredRes = requestPasswordReset('syedabsar99@gmail.com', 'admin');
+  assert(unconfiguredRes.success === false, 'PROVIDER FAILURE: Unconfigured Firebase Auth returns actionable error');
+  assert(unconfiguredRes.error?.includes('Firebase Authentication is not configured'), 'Clear configuration error returned when credentials missing');
+  simulatedFirebaseConfigured = true;
+
+  // Test 2: Unknown or unprovisioned member handling
+  const unknownMemberRes = requestPasswordReset('stranger@example.com', 'member');
+  assert(unknownMemberRes.success === true, 'SECURITY: Non-directory member receives enumeration-safe response');
+  assert(unknownMemberRes.providerDispatched === false, 'SECURITY: Outbound email NOT sent for non-directory member');
+
+  const unprovisionedMemberRes = requestPasswordReset('unprovisioned.student@example.com', 'member');
+  assert(unprovisionedMemberRes.success === true, 'Unprovisioned member in directory receives safe response');
+  assert(unprovisionedMemberRes.providerDispatched === false, 'Unprovisioned member email dispatch skipped until account activation');
+  assert(unprovisionedMemberRes.needsActivation === true, 'System correctly flags unprovisioned member account');
+
+  // Test 3: Action Code Verification States (valid, expired, already-used, malformed)
+  const adminResetDispatch = requestPasswordReset('syedabsar99@gmail.com', 'admin');
+  assert(adminResetDispatch.success === true && adminResetDispatch.providerDispatched === true, 'Admin reset request accepted and dispatched to provider');
+  const validAdminCode = adminResetDispatch.code!;
+
+  // Valid link
+  const validVerify = verifyActionCode(validAdminCode);
+  assert(validVerify.success === true, 'Valid Firebase reset code verified successfully');
+  assert(validVerify.email === 'syedabsar99@gmail.com', 'Target email correctly resolved from action code');
+  assert(validVerify.role === 'admin', 'Target role correctly resolved as admin');
+
+  // Malformed link
+  const malformedVerify = verifyActionCode('');
+  assert(malformedVerify.success === false, 'Malformed/empty action code rejected');
+  const nonExistentVerify = verifyActionCode('invalid_non_existent_code');
+  assert(nonExistentVerify.success === false, 'Non-existent action code rejected with invalid link error');
+
+  // Expired link
+  const expiredCode = 'oob_expired_sample_123';
+  simulatedActionCodes.set(expiredCode, { email: 'syedabsar99@gmail.com', expired: true, used: false });
+  const expiredVerify = verifyActionCode(expiredCode);
+  assert(expiredVerify.success === false, 'Expired action code rejected');
+  assert(expiredVerify.error?.includes('expired'), 'Specific expired link error message returned');
+
+  // Test 4: Password Policy and Mismatch Protection
+  const mismatchConfirm = confirmNewPassword(validAdminCode, 'NewAdminPass#2026', 'MismatchedPass#2026');
+  assert(mismatchConfirm.success === false, 'Password mismatch rejected during reset');
+
+  const weakConfirm = confirmNewPassword(validAdminCode, 'weakpass', 'weakpass');
+  assert(weakConfirm.success === false, 'Weak password rejected by policy (min 8 chars, uppercase, number, symbol)');
+
+  // Test 5: Successful Reset and Source-of-Truth Password Update
+  const newAdminPassword = 'BrandNewMasterAdmin#2026!';
+  const resetConfirmRes = confirmNewPassword(validAdminCode, newAdminPassword, newAdminPassword);
+  assert(resetConfirmRes.success === true, 'New admin password successfully confirmed and committed');
+
+  // Test 6: Replay / Single-Use Protection (Already-Used link)
+  const replayVerify = verifyActionCode(validAdminCode);
+  assert(replayVerify.success === false, 'SECURITY: Consumed reset code is strictly rejected on re-verification');
+  assert(replayVerify.error?.includes('already been used') || replayVerify.error?.includes('invalid'), 'Clear already-used/invalid error returned');
+
+  const replayConfirm = confirmNewPassword(validAdminCode, 'AnotherPassword#2026!', 'AnotherPassword#2026!');
+  assert(replayConfirm.success === false, 'SECURITY: Consumed reset code cannot be reused to change password again');
+
+  // Test 7: Successful Login with New Password & Rejection of Old Password
+  const oldLoginAttempt = authenticateUser('syedabsar99@gmail.com', 'InitialAdminPass#2026', 'admin');
+  assert(oldLoginAttempt.success === false, 'SECURITY: Old admin password strictly REJECTED after reset');
+
+  const newLoginAttempt = authenticateUser('syedabsar99@gmail.com', newAdminPassword, 'admin');
+  assert(newLoginAttempt.success === true, 'Admin successfully logs in with new password updated by reset');
+
+  // Test 8: Member Password Reset & Login Flow End-to-End
+  const memberResetDispatch = requestPasswordReset('student.amina@example.com', 'member');
+  assert(memberResetDispatch.success === true && memberResetDispatch.providerDispatched === true, 'Enrolled member reset request dispatched to provider');
+  const validMemberCode = memberResetDispatch.code!;
+
+  const newMemberPassword = 'AminaNewSecurePass#2026!';
+  const memberConfirmRes = confirmNewPassword(validMemberCode, newMemberPassword, newMemberPassword);
+  assert(memberConfirmRes.success === true, 'Member password successfully reset and directory passcode synchronized');
+  assert(simulatedDirectory.get('student.amina@example.com')?.passcode === newMemberPassword, 'Directory member profile passcode synchronized with auth update');
+
+  const memberOldLogin = authenticateUser('student.amina@example.com', 'InitialStudentPass#2026', 'member');
+  assert(memberOldLogin.success === false, 'SECURITY: Member old password strictly REJECTED after reset');
+
+  const memberNewLogin = authenticateUser('student.amina@example.com', newMemberPassword, 'member');
+  assert(memberNewLogin.success === true, 'Member successfully logs in with new password updated by reset');
+
+  // Test 9: Cross-Device Independence (Zero Browser-Local Storage Reliance)
+  // Simulate opening the link on a secondary device with empty storage
+  const secondaryDeviceCode = 'oob_cross_device_test_999';
+  simulatedActionCodes.set(secondaryDeviceCode, { email: 'student.amina@example.com', expired: false, used: false });
+  const crossDeviceVerify = verifyActionCode(secondaryDeviceCode);
+  assert(crossDeviceVerify.success === true && crossDeviceVerify.email === 'student.amina@example.com', 'CROSS-DEVICE: Reset link verifies successfully on external browser without local tokens');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

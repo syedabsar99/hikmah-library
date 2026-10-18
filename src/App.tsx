@@ -9,21 +9,27 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { MemberPortal } from './pages/MemberPortal';
 import { ResetPassword } from './pages/ResetPassword';
 
+const isResetPasswordRoute = (): boolean => {
+  try {
+    const pathname = window.location.pathname;
+    const search = new URLSearchParams(window.location.search);
+    return (
+      pathname.includes('reset-password') ||
+      search.has('oobCode') ||
+      search.get('mode') === 'resetPassword' ||
+      window.location.href.includes('reset-password') ||
+      window.location.hash.includes('reset-password')
+    );
+  } catch {
+    return false;
+  }
+};
+
 const AppContent: React.FC = () => {
   const { isAdmin, isMember } = useAuth();
   const [currentView, setCurrentView] = useState<string>(() => {
-    try {
-      const pathname = window.location.pathname;
-      const search = new URLSearchParams(window.location.search);
-      if (
-        pathname.includes('reset-password') ||
-        search.has('oobCode') ||
-        search.get('mode') === 'resetPassword'
-      ) {
-        return 'reset-password';
-      }
-    } catch {
-      // fallback
+    if (isResetPasswordRoute()) {
+      return 'reset-password';
     }
     return 'home';
   });
@@ -31,18 +37,8 @@ const AppContent: React.FC = () => {
   // Listen for browser popstate or URL changes
   useEffect(() => {
     const handlePopState = () => {
-      try {
-        const pathname = window.location.pathname;
-        const search = new URLSearchParams(window.location.search);
-        if (
-          pathname.includes('reset-password') ||
-          search.has('oobCode') ||
-          search.get('mode') === 'resetPassword'
-        ) {
-          setCurrentView('reset-password');
-        }
-      } catch {
-        // fallback
+      if (isResetPasswordRoute()) {
+        setCurrentView('reset-password');
       }
     };
 
