@@ -1055,15 +1055,9 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
               style={{
                 padding: '32px',
                 borderRadius: 'var(--radius-xl)',
-                border: unreadChatCounts.total > 0
-                  ? '2px solid rgba(239, 68, 68, 0.6)'
-                  : '1px solid rgba(217, 119, 6, 0.25)',
-                background: unreadChatCounts.total > 0
-                  ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.95) 55%, rgba(217, 119, 6, 0.08) 100%)'
-                  : 'linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)',
-                boxShadow: unreadChatCounts.total > 0
-                  ? '0 8px 32px rgba(239, 68, 68, 0.25)'
-                  : '0 8px 32px rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(217, 119, 6, 0.25)',
+                background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '20px',
@@ -1171,37 +1165,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                         width: '42px',
                         height: '42px',
                         borderRadius: '12px',
-                        background: unreadChatCounts.total > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(217, 119, 6, 0.15)',
-                        border: unreadChatCounts.total > 0 ? '1px solid rgba(239, 68, 68, 0.5)' : '1px solid rgba(217, 119, 6, 0.3)',
+                        background: 'rgba(217, 119, 6, 0.15)',
+                        border: '1px solid rgba(217, 119, 6, 0.3)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        position: 'relative',
                       }}
                     >
-                      <MessageSquare size={22} color={unreadChatCounts.total > 0 ? '#EF4444' : 'var(--accent-gold)'} />
-                      {unreadChatCounts.total > 0 && (
-                        <span
-                          style={{
-                            position: 'absolute',
-                            top: '-6px',
-                            right: '-6px',
-                            background: '#EF4444',
-                            color: '#FFFFFF',
-                            borderRadius: '50%',
-                            width: '20px',
-                            height: '20px',
-                            fontSize: '0.72rem',
-                            fontWeight: '900',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 0 8px rgba(239, 68, 68, 0.9)',
-                          }}
-                        >
-                          {unreadChatCounts.total}
-                        </span>
-                      )}
+                      <MessageSquare size={22} color="var(--accent-gold)" />
                     </div>
                     <h2 style={{ fontSize: '1.4rem', margin: 0, color: '#FFFFFF', fontWeight: '800' }}>
                       Private Encrypted Student Chat
@@ -1243,35 +1214,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                     display: 'flex',
                     alignItems: 'center',
                     gap: '10px',
-                    boxShadow: unreadChatCounts.total > 0
-                      ? '0 8px 25px rgba(239, 68, 68, 0.5)'
-                      : '0 8px 25px rgba(217, 119, 6, 0.4)',
+                    boxShadow: '0 8px 25px rgba(217, 119, 6, 0.4)',
                     cursor: 'pointer',
                     borderRadius: '12px',
-                    background: unreadChatCounts.total > 0
-                      ? 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
-                      : undefined,
-                    border: unreadChatCounts.total > 0 ? '1px solid #F87171' : undefined,
                   }}
                 >
                   <MessageSquare size={20} />
                   <span>Start Private Chat</span>
-                  {unreadChatCounts.total > 0 && (
-                    <span
-                      id="badge-chat-total-unread"
-                      style={{
-                        background: '#FFFFFF',
-                        color: '#DC2626',
-                        borderRadius: '12px',
-                        padding: '2px 8px',
-                        fontSize: '0.82rem',
-                        fontWeight: '900',
-                        marginLeft: '4px',
-                      }}
-                    >
-                      {unreadChatCounts.total}
-                    </span>
-                  )}
                 </button>
               </div>
             </div>
