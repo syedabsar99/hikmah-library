@@ -65,6 +65,18 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Synchronize browser address bar with active authenticated view
+  useEffect(() => {
+    try {
+      const base = window.location.pathname.startsWith('/hikmah-library') ? '/hikmah-library' : '';
+      if (currentView === 'admin-dashboard' && window.location.pathname.includes('/login')) {
+        window.history.replaceState(null, '', `${base}/admin`);
+      } else if (currentView === 'member-portal' && window.location.pathname.includes('/login')) {
+        window.history.replaceState(null, '', `${base}/student/portal`);
+      }
+    } catch {}
+  }, [currentView]);
+
   const handleNavigate = (view: string) => {
     setCurrentView(view);
     try {
