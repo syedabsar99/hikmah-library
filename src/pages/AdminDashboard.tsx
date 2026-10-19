@@ -1597,9 +1597,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
         {/* TAB 2: MEMBER MANAGEMENT */}
         {activeTab === 'members' && (
-          <div>
-            <div className="glass-panel member-directory-filter-bar" style={{ padding: '14px 18px', marginBottom: '14px' }}>
-              <div className="member-search-group">
+          <div style={{ width: '100%' }}>
+            <div
+              className="glass-panel member-directory-filter-bar"
+              style={{
+                padding: '14px 18px',
+                marginBottom: '14px',
+                height: 'auto',
+                minHeight: '0',
+                flexGrow: 0,
+                alignSelf: 'stretch',
+              }}
+            >
+              <div className="member-search-group" style={{ height: 'auto', minHeight: '0', flexGrow: 0 }}>
                 <div style={{ position: 'relative', width: '100%' }}>
                   <input
                     type="text"
@@ -1617,6 +1627,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   className="form-select"
                   value={memberStatusFilter}
                   onChange={(e) => setMemberStatusFilter(e.target.value)}
+                  style={{ height: 'auto', minHeight: '0' }}
                 >
                   <option value="All">All Statuses</option>
                   <option value="Active">Active Only</option>
@@ -1626,7 +1637,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </select>
               </div>
 
-              <div className="member-action-buttons-group">
+              <div className="member-action-buttons-group" style={{ height: 'auto', minHeight: '0', flexGrow: 0 }}>
                 <button className="btn-outline" onClick={handleExportMembers}>
                   <Download size={16} /> Export CSV
                 </button>
