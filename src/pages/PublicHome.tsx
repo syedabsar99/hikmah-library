@@ -689,7 +689,7 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                 boxShadow: '0 20px 45px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(212, 175, 55, 0.08)',
                 aspectRatio: '16 / 9',
                 maxHeight: '540px',
-                minHeight: '320px',
+                minHeight: 'min(320px, 56vw)',
               }}
             >
               {/* Sliding Track */}
@@ -969,8 +969,8 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
-              gap: '24px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
+              gap: '20px',
             }}
           >
             {facilities
@@ -1045,12 +1045,12 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '28px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '24px' }}>
             {/* Core Dynamic Rules Card */}
             <div
               className="glass-panel"
               style={{
-                padding: '36px 30px',
+                padding: '24px 20px',
                 border: '1px solid var(--border-medium)',
               }}
             >

@@ -1357,9 +1357,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       {/* MAIN CONTENT AREA */}
       <main className="admin-main-content">
         {/* Top Header Bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h1 style={{ fontSize: '1.9rem', color: '#FFFFFF' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
+          <div style={{ minWidth: 0, flex: '1 1 240px' }}>
+            <h1 style={{ fontSize: 'clamp(1.2rem, 3.5vw, 1.85rem)', color: '#FFFFFF', lineHeight: 1.25, wordBreak: 'break-word', margin: 0 }}>
               {activeTab === 'dashboard' && 'Administrative Overview'}
               {activeTab === 'members' && 'Member Directory & Registration'}
               {activeTab === 'fees' && 'Membership Fee & Expiry Tracker'}
@@ -1371,17 +1371,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               {activeTab === 'registration' && 'Registration Review & Cancellation Queue'}
               {activeTab === 'settings' && 'System Configuration & Owner Handover'}
             </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '2px' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.84rem', marginTop: '4px', marginBottom: 0 }}>
               Hikmah Library &amp; Study Lounge • Real-time Records Engine
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn-outline" onClick={loadData} title="Refresh records">
-              <RefreshCw size={16} /> Refresh
-            </button>
-            <button className="btn-gold" onClick={() => setShowAddMemberModal(true)}>
-              <Plus size={16} /> Register New Member
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button className="btn-outline" onClick={loadData} title="Refresh records" style={{ fontSize: '0.82rem', padding: '7px 14px' }}>
+              <RefreshCw size={15} /> Refresh
             </button>
           </div>
         </div>
@@ -1393,9 +1390,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '20px',
-                marginBottom: '30px',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+                gap: '16px',
+                marginBottom: '26px',
               }}
             >
               <div className="glass-panel" style={{ padding: '22px' }}>
@@ -1470,10 +1467,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             )}
 
             {/* Quick Actions Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '20px' }}>
               {/* Overdue Students Quick Action Card */}
-              <div className="glass-panel" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '8px' }}>
                   <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px', color: '#FFFFFF' }}>
                     <CreditCard color="var(--accent-gold)" /> Expiry &amp; Fee Follow-up
                   </h3>
@@ -1492,14 +1489,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          padding: '12px 16px',
+                          padding: '12px 14px',
                           background: m.feeStatus === 'Overdue' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
                           border: `1px solid ${m.feeStatus === 'Overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
                           borderRadius: 'var(--radius-md)',
+                          flexWrap: 'wrap',
+                          gap: '10px',
                         }}
                       >
-                        <div>
-                          <div style={{ fontWeight: '700', fontSize: '0.92rem', color: '#FFFFFF' }}>
+                        <div style={{ minWidth: 0, flex: '1 1 180px' }}>
+                          <div style={{ fontWeight: '700', fontSize: '0.92rem', color: '#FFFFFF', wordBreak: 'break-word' }}>
                             {m.fullName}
                           </div>
                           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -1507,7 +1506,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                           <button
                             className="btn-success"
                             onClick={() => handleMarkFeePaid(m)}
@@ -1537,8 +1536,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               </div>
 
               {/* High Warning Watchlist */}
-              <div className="glass-panel" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '8px' }}>
                   <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px', color: '#FFFFFF' }}>
                     <ShieldAlert color="#F59E0B" /> Disciplinary Watchlist (≥ 3 Warnings)
                   </h3>
@@ -1555,14 +1554,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '12px 16px',
+                        padding: '12px 14px',
                         background: 'rgba(255, 255, 255, 0.04)',
                         border: '1px solid var(--border-subtle)',
                         borderRadius: 'var(--radius-md)',
+                        flexWrap: 'wrap',
+                        gap: '10px',
                       }}
                     >
-                      <div style={{ flex: 1, marginRight: '16px' }}>
-                        <div style={{ fontWeight: '700', fontSize: '0.92rem', color: '#FFFFFF' }}>
+                      <div style={{ flex: '1 1 180px', minWidth: 0, marginRight: '8px' }}>
+                        <div style={{ fontWeight: '700', fontSize: '0.92rem', color: '#FFFFFF', wordBreak: 'break-word' }}>
                           {m.fullName}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{m.batch}</div>
@@ -1609,15 +1610,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 alignItems: 'center',
               }}
             >
-              <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: '280px' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
+              <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 0 }}>
                   <input
                     type="text"
                     className="form-input"
                     placeholder="Search student name, email, or desk..."
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
-                    style={{ paddingLeft: '38px' }}
+                    style={{ paddingLeft: '38px', width: '100%' }}
                   />
                   <Search size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: '#94A3B8' }} />
                 </div>
@@ -1626,7 +1627,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   className="form-select"
                   value={memberStatusFilter}
                   onChange={(e) => setMemberStatusFilter(e.target.value)}
-                  style={{ width: '160px' }}
+                  style={{ flex: '1 1 140px', minWidth: 0 }}
                 >
                   <option value="All">All Statuses</option>
                   <option value="Active">Active Only</option>
@@ -1636,12 +1637,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="btn-outline" onClick={handleExportMembers}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', width: 'auto' }}>
+                <button className="btn-outline" onClick={handleExportMembers} style={{ flex: '1 1 auto' }}>
                   <Download size={16} /> Export CSV
                 </button>
-                <button className="btn-gold" onClick={() => setShowAddMemberModal(true)}>
-                  <Plus size={16} /> Add Member
+                <button className="btn-gold" onClick={() => setShowAddMemberModal(true)} style={{ flex: '1 1 auto' }}>
+                  <Plus size={16} /> Register New Member
                 </button>
               </div>
             </div>
@@ -1826,26 +1827,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   </div>
 
                   {/* Touch Action Buttons */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '8px' }}>
                     <button
                       className="btn-outline"
                       onClick={() => handleOpenEditMember(m)}
-                      style={{ padding: '7px 10px', fontSize: '0.78rem', justifyContent: 'center', color: 'var(--accent-gold)', borderColor: 'rgba(212,175,55,0.4)' }}
+                      style={{ padding: '8px 10px', fontSize: '0.78rem', justifyContent: 'center', color: 'var(--accent-gold)', borderColor: 'rgba(212,175,55,0.4)' }}
                     >
                       <Edit2 size={13} /> Edit Desk
                     </button>
                     <button
                       className="btn-success"
                       onClick={() => handleMarkFeePaid(m)}
-                      style={{ padding: '7px 10px', fontSize: '0.78rem', justifyContent: 'center' }}
+                      disabled={markingFeePaidId === m.id}
+                      style={{ padding: '8px 10px', fontSize: '0.78rem', justifyContent: 'center', opacity: markingFeePaidId === m.id ? 0.6 : 1 }}
                     >
-                      ✓ Mark Paid
+                      {markingFeePaidId === m.id ? 'Saving...' : '✓ Mark Paid'}
+                    </button>
+                    <button
+                      className="btn-danger"
+                      onClick={() => {
+                        setTargetMemberForWarning(m);
+                        setShowWarningModal(true);
+                      }}
+                      style={{
+                        padding: '8px 10px',
+                        fontSize: '0.78rem',
+                        justifyContent: 'center',
+                        background: '#DC2626',
+                        borderColor: '#EF4444',
+                        color: '#FFFFFF',
+                        fontWeight: '700',
+                        boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
+                      }}
+                      title="Issue Warning to Student"
+                    >
+                      <AlertTriangle size={13} /> + Warning
                     </button>
                     {(m.feeStatus === 'Overdue' || m.feeStatus === 'Due') && (
                       <button
                         className="btn-gold"
                         onClick={() => handleSendFeeReminder(m)}
-                        style={{ padding: '7px 10px', fontSize: '0.78rem', justifyContent: 'center' }}
+                        style={{ padding: '8px 10px', fontSize: '0.78rem', justifyContent: 'center' }}
                       >
                         <Bell size={13} /> Remind (WA)
                       </button>
@@ -1857,11 +1879,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                         setShowDeleteMemberModal(true);
                       }}
                       style={{
-                        padding: '7px 10px',
+                        padding: '8px 10px',
                         fontSize: '0.78rem',
                         justifyContent: 'center',
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        borderColor: 'rgba(239, 68, 68, 0.4)',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        borderColor: 'rgba(239, 68, 68, 0.3)',
                         color: '#EF4444',
                       }}
                     >
@@ -1886,8 +1908,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '20px',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+                gap: '16px',
                 marginBottom: '26px',
               }}
             >
@@ -1929,15 +1951,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 gap: '12px',
               }}
             >
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {(['All', 'Overdue', 'Due', 'Paid'] as const).map((filter) => (
                   <button
                     key={filter}
                     onClick={() => setFeeFilter(filter)}
                     style={{
-                      padding: '7px 16px',
+                      padding: '7px 14px',
                       borderRadius: 'var(--radius-pill)',
-                      fontSize: '0.85rem',
+                      fontSize: '0.82rem',
                       fontWeight: '700',
                       background: feeFilter === filter ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.05)',
                       color: feeFilter === filter ? '#0A0D14' : 'var(--text-muted)',
@@ -2073,13 +2095,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         {/* TAB 6: WARNING MANAGEMENT */}
         {activeTab === 'warnings' && (
           <div>
-            <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '6px', color: '#FFFFFF' }}>
-                Disciplinary Warning Audit Registry (Max: 10/10)
-              </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: '1.6' }}>
-                All disciplinary notices are recorded with issuing Administrator stamps and reasons. Reaching 10 warnings triggers an automatic registration review for seat cancellation.
-              </p>
+            <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '6px', color: '#FFFFFF' }}>
+                  Disciplinary Warning Audit Registry (Max: 10/10)
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: '1.6', margin: 0 }}>
+                  All disciplinary notices are recorded with issuing Administrator stamps and reasons. Reaching 10 warnings triggers an automatic registration review for seat cancellation.
+                </p>
+              </div>
+              <button
+                className="btn-danger"
+                onClick={() => setActiveTab('members')}
+                style={{ padding: '9px 16px', fontSize: '0.84rem', display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0, fontWeight: '700' }}
+                title="Go to Member Directory to select a student and issue an official warning"
+              >
+                <AlertTriangle size={15} /> Issue Warning to Student
+              </button>
             </div>
 
             <div className="data-table-container">
@@ -2228,7 +2260,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '20px' }}>
               {announcements.map((a) => (
                 <div
                   key={a.id}
@@ -2323,7 +2355,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '20px' }}>
               {facilities.map((fac) => (
                 <div
                   key={fac.id}
@@ -2437,7 +2469,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                       opacity: rule.isActive ? 1 : 0.6,
                     }}
                   >
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flex: 1, minWidth: '280px' }}>
+                    <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
                       <span
                         style={{
                           width: '32px',
@@ -2683,7 +2715,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
                 gap: '20px',
               }}
             >

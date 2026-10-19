@@ -379,16 +379,15 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-canvas)', padding: '40px 0 80px 0' }}>
+    <div className="member-portal-page-wrapper">
       <div className="container" style={{ maxWidth: '1100px' }}>
         
         {/* =========================================================================
             HEADER & STUDENT IDENTITY BAR (NAME, PHOTO/INITIALS, ALLOTTED DESK, GOAL)
             ========================================================================= */}
         <div
-          className="glass-panel"
+          className="glass-panel member-portal-header-card"
           style={{
-            padding: '32px',
             borderRadius: 'var(--radius-xl)',
             marginBottom: '28px',
             border: '1px solid rgba(212, 175, 55, 0.35)',
@@ -478,12 +477,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
               </div>
 
               {/* Student Name & Controls */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  <h1 style={{ color: '#FFFFFF', fontSize: '1.9rem', margin: 0, fontWeight: '800' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <h1 style={{ color: '#FFFFFF', fontSize: 'clamp(1.25rem, 5vw, 1.85rem)', margin: 0, fontWeight: '800', wordBreak: 'break-word' }}>
                     {profile?.fullName}
                   </h1>
-                  <span className="badge badge-present" style={{ fontSize: '0.8rem' }}>
+                  <span className="badge badge-present" style={{ fontSize: '0.78rem' }}>
                     {profile?.membershipStatus} Member
                   </span>
 
@@ -505,7 +504,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                   )}
                 </div>
 
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '6px' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', marginTop: '6px', wordBreak: 'break-word' }}>
                   Email: <strong style={{ color: 'var(--accent-gold)' }}>{profile?.email}</strong> • Phone: <strong style={{ color: '#F1F5F9' }}>{profile?.phoneNumber}</strong>
                 </div>
 
@@ -564,7 +563,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
             </div>
 
             {/* Right: Actions (Refresh & Logout) */}
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div className="member-header-actions-bar">
               <button
                 onClick={async () => {
                   await refreshProfile();
@@ -572,17 +571,18 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                 }}
                 className="glass-panel"
                 style={{
-                  padding: '9px 16px',
-                  fontSize: '0.88rem',
+                  padding: '8px 14px',
+                  fontSize: '0.84rem',
                   color: 'var(--accent-gold)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
                   borderRadius: 'var(--radius-md)',
+                  justifyContent: 'center',
                 }}
                 title="Refresh records from database"
               >
-                <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} /> Refresh
+                <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Refresh
               </button>
               <button
                 id="member-change-password-btn"
@@ -595,8 +595,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                   setConfirmPassword('');
                 }}
                 style={{
-                  padding: '9px 16px',
-                  fontSize: '0.88rem',
+                  padding: '8px 14px',
+                  fontSize: '0.84rem',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
@@ -605,18 +605,19 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                   fontWeight: '700',
                   borderRadius: 'var(--radius-md)',
                   cursor: 'pointer',
+                  justifyContent: 'center',
                 }}
                 title="Change your account password directly"
               >
-                <Key size={15} /> Change Password
+                <Key size={14} /> Change Password
               </button>
               <button
                 id="member-logout-btn"
                 className="btn-danger"
                 onClick={logout}
-                style={{ padding: '9px 18px', fontSize: '0.88rem' }}
+                style={{ padding: '8px 14px', fontSize: '0.84rem', justifyContent: 'center' }}
               >
-                <LogOut size={16} /> Logout
+                <LogOut size={15} /> Logout
               </button>
             </div>
           </div>
@@ -624,12 +625,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
           {/* Dedicated Sub-bar: Admin-Allotted Desk & Librarian-Set Study Goal (Zero Shifts) */}
           <div
             style={{
-              marginTop: '22px',
-              paddingTop: '18px',
+              marginTop: '20px',
+              paddingTop: '16px',
               borderTop: '1px solid rgba(255, 255, 255, 0.08)',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '16px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))',
+              gap: '14px',
             }}
           >
             {/* Allotted Desk / Cabin (Admin Controlled Only) */}
@@ -891,8 +892,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '20px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))',
+              gap: '16px',
               marginBottom: '20px',
             }}
           >
@@ -1630,12 +1631,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                 <form
                   onSubmit={handleSendMessage}
                   style={{
-                    padding: '14px 22px',
+                    padding: '12px 16px',
                     background: 'rgba(15, 23, 42, 0.95)',
                     borderTop: '1px solid var(--border-subtle)',
                     display: 'flex',
-                    gap: '12px',
+                    gap: '10px',
                     alignItems: 'center',
+                    flexWrap: 'wrap',
                   }}
                 >
                   <input
@@ -1644,15 +1646,15 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                     placeholder={`Type an encrypted message to ${activeChatPeer.fullName}...`}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    style={{ flex: 1, padding: '11px 16px', background: 'rgba(0, 0, 0, 0.4)' }}
+                    style={{ flex: '1 1 180px', minWidth: 0, padding: '10px 14px', background: 'rgba(0, 0, 0, 0.4)' }}
                   />
                   <button
                     type="submit"
                     className="btn-gold"
                     disabled={isEncrypting || !chatInput.trim()}
-                    style={{ padding: '11px 24px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                    style={{ padding: '10px 18px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', flexShrink: 0 }}
                   >
-                    <Send size={16} /> Send
+                    <Send size={15} /> Send
                   </button>
                 </form>
               </div>
