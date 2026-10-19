@@ -230,18 +230,23 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
       >
         <div className="container" style={{ position: 'relative', zIndex: 2 }}>
           <div style={{ maxWidth: '920px', margin: '0 auto', textAlign: 'center' }}>
-            {/* PRESTIGE ANIMATED HERO TITLE WITH RADIANT GOLD SHIMMER & CELESTIAL GLOW */}
+            {/* NOBLE HERO TITLE WITH MODERN LIQUID SHIMMER */}
             <div className="hero-title-container">
               <div className="hero-title-glow-orb" />
               <h1 className="hero-title-epic" aria-label="Hikmah Library & Study Lounge">
-                <span className="hero-title-white">Hikmah Library </span>
-                <span className="hero-title-gold-accent">&amp; Study Lounge</span>
+                <span className="hero-title-white">Hikmah Library</span>
+                <span className="hero-title-modern-accent">&amp; Study Lounge</span>
               </h1>
-              {/* Golden Ornamental Divider */}
-              <div className="hero-title-ornament">
-                <span className="hero-ornament-line" />
-                <span className="hero-ornament-diamond" />
-                <span className="hero-ornament-line" />
+            </div>
+
+            {/* SACRED QURANIC AYAT (رَّبِّ زِدْنِي عِلْمًا) — DIRECT, VISIBLE, NO CARD, NO MEANING */}
+            <div className="hero-ayat-direct-wrapper" role="region" aria-label="Quranic Invocation: Rabbi zidni 'ilma">
+              <div className="hero-ayat-direct">
+                <span className="hero-ayat-flourish" aria-hidden="true">﴿</span>
+                <span className="hero-ayat-text" dir="rtl" lang="ar">
+                  رَّبِّ زِدْنِي عِلْمًا
+                </span>
+                <span className="hero-ayat-flourish" aria-hidden="true">﴾</span>
               </div>
             </div>
 
