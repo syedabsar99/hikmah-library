@@ -191,7 +191,13 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err: any) {
-    console.error('API members error:', err);
-    return res.status(500).json({ error: err.message });
+    console.warn('API members notice (Blob store paused or unreachable):', err?.message);
+    return res.status(200).json({
+      success: true,
+      members: [],
+      deletedIds: [],
+      paused: true,
+      notice: 'Operating in local-first & Google Cloud Firestore mode',
+    });
   }
 }

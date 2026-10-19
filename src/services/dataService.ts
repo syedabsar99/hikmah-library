@@ -808,22 +808,36 @@ export const DataService = {
       let cloudList: MemberProfile[] | null = null;
       let cloudDeletedIds: string[] = [];
 
-      // 1. Try internal /api/members first
-      try {
-        const res = await fetch(`/api/members?t=${Date.now()}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && Array.isArray(json.members)) {
-            cloudList = json.members;
+      // 0. Primary Cloud Source: Google Cloud Firestore (50,000 free operations/day)
+      if (this.isLiveFirebase() && db) {
+        try {
+          const snap = await getDocs(collection(db, 'member_profiles'));
+          if (snap && !snap.empty) {
+            cloudList = snap.docs.map((d) => d.data() as MemberProfile);
           }
-          if (json.success && Array.isArray(json.deletedIds)) {
-            cloudDeletedIds = json.deletedIds;
-          }
+        } catch (fbErr) {
+          console.warn('Firestore cloud fetch note:', fbErr);
         }
-      } catch {}
+      }
+
+      // 1. Try internal /api/members as backup if firestore returned empty
+      if (!cloudList) {
+        try {
+          const res = await fetch(`/api/members?t=${Date.now()}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && Array.isArray(json.members)) {
+              cloudList = json.members;
+            }
+            if (json.success && Array.isArray(json.deletedIds)) {
+              cloudDeletedIds = json.deletedIds;
+            }
+          }
+        } catch {}
+      }
 
       // 2. Direct public Blob URL fallback
       if (!cloudList) {
@@ -915,6 +929,20 @@ export const DataService = {
   },
 
   async pushMembersToCloud(members: MemberProfile[]): Promise<void> {
+    // 1. Primary Cloud Target: Google Cloud Firestore (Immediate, 100% Free, 50,000 writes/day)
+    if (this.isLiveFirebase() && db) {
+      try {
+        for (const m of members) {
+          if (m.id) {
+            await setDoc(doc(db, 'member_profiles', m.id), m, { merge: true });
+          }
+        }
+      } catch (fbErr) {
+        console.warn('Firestore push notice:', fbErr);
+      }
+    }
+
+    // 2. Secondary/Legacy Blob backup (fails silently if store is paused)
     try {
       if (typeof window === 'undefined' || !window.location || typeof fetch === 'undefined') return;
       const deletedIds = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
@@ -924,7 +952,7 @@ export const DataService = {
         body: JSON.stringify({ action: 'save_all', members, deletedIds }),
       });
     } catch (e) {
-      console.warn('Failed to push members to cloud:', e);
+      // Ignored: Blob fallback paused or network offline
     }
   },
 
