@@ -36,6 +36,7 @@ const KEYS = {
   FACILITIES: 'hikmah_facilities_v2',
   RULES: 'hikmah_rules_v2',
   CAROUSEL_PHOTOS: 'hikmah_carousel_photos_v2',
+  MEMBER_AVATARS: 'hikmah_member_avatars_v1',
 };
 
 // Seed Data
@@ -675,6 +676,37 @@ export const DataService = {
     );
   },
 
+  getLocalAvatar(memberId: string): string {
+    if (typeof localStorage === 'undefined' || !memberId) return '';
+    try {
+      const direct = localStorage.getItem(`hikmah_avatar_${memberId}`);
+      if (direct) return direct;
+      const map = loadLocal<Record<string, string>>(KEYS.MEMBER_AVATARS, {});
+      return map[memberId] || '';
+    } catch {
+      return '';
+    }
+  },
+
+  setLocalAvatar(memberId: string, avatarUrl: string): void {
+    if (typeof localStorage === 'undefined' || !memberId) return;
+    try {
+      if (avatarUrl) {
+        localStorage.setItem(`hikmah_avatar_${memberId}`, avatarUrl);
+        const map = loadLocal<Record<string, string>>(KEYS.MEMBER_AVATARS, {});
+        map[memberId] = avatarUrl;
+        saveLocal(KEYS.MEMBER_AVATARS, map);
+      } else {
+        localStorage.removeItem(`hikmah_avatar_${memberId}`);
+        const map = loadLocal<Record<string, string>>(KEYS.MEMBER_AVATARS, {});
+        delete map[memberId];
+        saveLocal(KEYS.MEMBER_AVATARS, map);
+      }
+    } catch (e) {
+      console.warn('Error saving local avatar:', e);
+    }
+  },
+
   // Synchronous Local Storage Getters for Instant Zero-Flicker Initial Renders
   getLocalMembersSync(): MemberProfile[] {
     const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
@@ -722,8 +754,11 @@ export const DataService = {
         calculatedStatus = 'Due';
       }
 
+      const avatarUrl = m.avatarUrl || this.getLocalAvatar(m.id) || '';
+
       return {
         ...m,
+        avatarUrl,
         joiningDate,
         feeDueDate,
         monthlyFee,
@@ -824,12 +859,19 @@ export const DataService = {
           }
         });
 
-        // Merge cloud members (authoritative, skipping deleted)
+        // Merge cloud members (authoritative, skipping deleted, preserving persistent avatars)
         cloudList.forEach((m) => {
           const id = (m.id || '').toLowerCase().trim();
           const email = (m.email || '').toLowerCase().trim();
           if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
-            mergedMap.set(email, m);
+            const existing = mergedMap.get(email);
+            const persistedAvatar = this.getLocalAvatar(m.id || existing?.id || '');
+            const avatarUrl = m.avatarUrl || existing?.avatarUrl || persistedAvatar || '';
+            mergedMap.set(email, {
+              ...existing,
+              ...m,
+              avatarUrl,
+            });
           } else {
             mergedMap.delete(email);
           }
@@ -900,8 +942,11 @@ export const DataService = {
         calculatedStatus = 'Due';
       }
 
+      const avatarUrl = m.avatarUrl || this.getLocalAvatar(m.id) || '';
+
       return {
         ...m,
+        avatarUrl,
         joiningDate,
         feeDueDate,
         monthlyFee,
@@ -1015,20 +1060,42 @@ export const DataService = {
   },
 
   async updateMemberAvatar(memberId: string, avatarUrl: string): Promise<MemberProfile | null> {
+    // 1. Store in dedicated local avatar storage for instant offline & reload persistence
+    this.setLocalAvatar(memberId, avatarUrl);
+
+    // 2. Update in current local member list
     const members = await this.getMembers();
-    const index = members.findIndex((m) => m.id === memberId);
+    const index = members.findIndex((m) => m.id === memberId || m.uid === memberId);
     if (index === -1) return null;
 
     members[index].avatarUrl = avatarUrl;
     saveLocal(KEYS.MEMBERS, members);
 
+    // 3. Persist to Firestore with setDoc merge so document is created if not yet present
     if (this.isLiveFirebase() && db) {
       try {
-        await updateDoc(doc(db, 'member_profiles', memberId), { avatarUrl });
+        await setDoc(
+          doc(db, 'member_profiles', memberId),
+          {
+            ...members[index],
+            avatarUrl,
+          },
+          { merge: true }
+        );
       } catch (err) {
         console.warn('Firebase updateMemberAvatar sync error:', err);
       }
     }
+
+    // 4. Push updated members array to cloud blob
+    await this.pushMembersToCloud(members);
+
+    // 5. Broadcast real-time update event across components & tabs
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hikmah_member_updated', { detail: members[index] }));
+      window.dispatchEvent(new CustomEvent('storage'));
+    }
+
     return members[index];
   },
 

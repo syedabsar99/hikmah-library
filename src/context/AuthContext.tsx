@@ -121,6 +121,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout();
         return;
       }
+      const localAvatar = DataService.getLocalAvatar(profile.id);
+      if (!profile.avatarUrl && localAvatar) {
+        profile.avatarUrl = localAvatar;
+      }
       setCurrentMemberProfile(profile);
       if (profile.membershipStatus === 'Cancelled') {
         alert('Your registration has been cancelled by administration. Logging out.');
@@ -140,12 +144,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
+    const handleMemberUpdated = (e: any) => {
+      if (e.detail?.id === currentUser.memberId) {
+        setCurrentMemberProfile(e.detail);
+      }
+    };
+
     window.addEventListener('hikmah_member_deleted', handleMemberDeleted);
+    window.addEventListener('hikmah_member_updated', handleMemberUpdated);
     window.addEventListener('storage', verifyMemberStatus);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('hikmah_member_deleted', handleMemberDeleted);
+      window.removeEventListener('hikmah_member_updated', handleMemberUpdated);
       window.removeEventListener('storage', verifyMemberStatus);
     };
   }, [currentUser]);
@@ -153,7 +165,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = async () => {
     if (currentUser?.role === 'member' && currentUser.memberId) {
       const p = await DataService.getMemberById(currentUser.memberId);
-      if (p) setCurrentMemberProfile(p);
+      if (p) {
+        const localAvatar = DataService.getLocalAvatar(p.id);
+        if (!p.avatarUrl && localAvatar) {
+          p.avatarUrl = localAvatar;
+        }
+        setCurrentMemberProfile(p);
+      }
     }
   };
 

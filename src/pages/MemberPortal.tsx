@@ -9,6 +9,7 @@ import type {
   MemberProfile,
 } from '../types';
 import { validatePasswordPolicy } from '../utils/validation';
+import { compressAvatarImage } from '../utils/imageCompressor';
 import {
   AlertTriangle,
   ShieldCheck,
@@ -148,6 +149,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
         fresh.feeReminders = [];
         DataService.updateMember(fresh.id, { feeReminders: [] }, 'Auto-clear Paid Fee Reminders');
       }
+      const localAvatar = DataService.getLocalAvatar(fresh.id);
+      if (!fresh.avatarUrl && localAvatar) {
+        fresh.avatarUrl = localAvatar;
+      }
       setMemberProfile(fresh);
       const warns = await DataService.getWarnings(currentUser.memberId);
       setMyWarnings(warns.filter((w) => !w.isCorrected));
@@ -191,10 +196,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     };
   }, [currentUser]);
 
-  // Keep local member profile updated when auth profile updates
+  // Keep local member profile updated when auth profile updates without wiping out persistent avatar
   useEffect(() => {
     if (authMemberProfile) {
-      setMemberProfile(authMemberProfile);
+      setMemberProfile((prev) => ({
+        ...authMemberProfile,
+        avatarUrl: authMemberProfile.avatarUrl || prev?.avatarUrl || DataService.getLocalAvatar(authMemberProfile.id),
+      }));
     }
   }, [authMemberProfile]);
 
@@ -315,39 +323,45 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   // Student Photo Upload Handler
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !currentUser?.memberId) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Photo size exceeds 2 MB. Please select a smaller photo.');
-      return;
-    }
+    const memberId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    if (!file || !memberId) return;
 
     setIsUploadingPhoto(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
-        await DataService.updateMemberAvatar(currentUser.memberId!, base64Data);
-        await refreshProfile();
-        await loadMemberData();
-        setIsUploadingPhoto(false);
-      };
-      reader.readAsDataURL(file);
+      // 1. Optimize & compress avatar to standard dimensions (~25KB)
+      const compressedBase64 = await compressAvatarImage(file, 360, 360, 0.85);
+
+      // 2. Immediately reflect in local state for zero-flicker UI
+      setMemberProfile((prev) => (prev ? { ...prev, avatarUrl: compressedBase64 } : null));
+
+      // 3. Persist across localStorage, Firestore, and cloud
+      await DataService.updateMemberAvatar(memberId, compressedBase64);
+      await refreshProfile();
+      await loadMemberData();
     } catch (err) {
       console.error('Error uploading student photo:', err);
+      alert('Unable to process photo. Please try a different image.');
+    } finally {
       setIsUploadingPhoto(false);
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
   // Student Photo Removal Handler (revert to initials)
   const handleRemovePhoto = async () => {
-    if (!currentUser?.memberId) return;
+    const memberId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    if (!memberId) return;
     if (window.confirm('Remove profile photo and display your name initials instead?')) {
       setIsUploadingPhoto(true);
       try {
-        await DataService.updateMemberAvatar(currentUser.memberId, '');
+        setMemberProfile((prev) => (prev ? { ...prev, avatarUrl: '' } : null));
+        await DataService.updateMemberAvatar(memberId, '');
         await refreshProfile();
         await loadMemberData();
+      } catch (err) {
+        console.error('Error removing student photo:', err);
       } finally {
         setIsUploadingPhoto(false);
       }
