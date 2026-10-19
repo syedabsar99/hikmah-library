@@ -810,8 +810,9 @@ export const DataService = {
 
       // 1. Try internal /api/members first
       try {
-        const res = await fetch('/api/members', {
-          headers: { 'Cache-Control': 'no-cache' },
+        const res = await fetch(`/api/members?t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
         });
         if (res.ok) {
           const json = await res.json();

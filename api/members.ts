@@ -1,9 +1,12 @@
-import { put, list } from '@vercel/blob';
+import { put, list, del } from '@vercel/blob';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -11,15 +14,28 @@ export default async function handler(req: any, res: any) {
 
   try {
     const { blobs } = await list();
-    const memberBlob = blobs.find((b) => b.pathname === 'members.json');
-    const deletedBlob = blobs.find((b) => b.pathname === 'deleted_ids.json');
+    // Sort descending by uploadedAt so the most recent blob is always prioritized
+    const memberBlobs = blobs
+      .filter((b) => b.pathname === 'members.json')
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    const deletedBlobs = blobs
+      .filter((b) => b.pathname === 'deleted_ids.json')
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+
+    const memberBlob = memberBlobs[0];
+    const deletedBlob = deletedBlobs[0];
 
     let currentMembers: any[] = [];
     let deletedIds: string[] = [];
 
     if (memberBlob) {
       try {
-        const response = await fetch(`${memberBlob.url}?t=${Date.now()}`);
+        const targetUrl = memberBlob.downloadUrl || memberBlob.url;
+        const separator = targetUrl.includes('?') ? '&' : '?';
+        const response = await fetch(`${targetUrl}${separator}t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+        });
         if (response.ok) {
           currentMembers = await response.json();
         }
@@ -30,7 +46,12 @@ export default async function handler(req: any, res: any) {
 
     if (deletedBlob) {
       try {
-        const response = await fetch(`${deletedBlob.url}?t=${Date.now()}`);
+        const targetUrl = deletedBlob.downloadUrl || deletedBlob.url;
+        const separator = targetUrl.includes('?') ? '&' : '?';
+        const response = await fetch(`${targetUrl}${separator}t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+        });
         if (response.ok) {
           deletedIds = await response.json();
         }
@@ -75,7 +96,7 @@ export default async function handler(req: any, res: any) {
         deletedIds = Array.from(newDeletedSet);
 
         // Commit both files to Blob
-        await Promise.all([
+        const [savedMembersBlob, savedDeletedBlob] = await Promise.all([
           put('members.json', JSON.stringify(currentMembers, null, 2), {
             access: 'public',
             addRandomSuffix: false,
@@ -87,6 +108,20 @@ export default async function handler(req: any, res: any) {
             allowOverwrite: true,
           }),
         ]);
+
+        // Clean up older blobs with identical pathname if multiple exist
+        try {
+          const staleUrls: string[] = [];
+          memberBlobs.forEach((b) => {
+            if (b.url !== savedMembersBlob.url) staleUrls.push(b.url);
+          });
+          deletedBlobs.forEach((b) => {
+            if (b.url !== savedDeletedBlob.url) staleUrls.push(b.url);
+          });
+          if (staleUrls.length > 0) {
+            await del(staleUrls);
+          }
+        } catch {}
 
         return res.status(200).json({
           success: true,
@@ -116,7 +151,7 @@ export default async function handler(req: any, res: any) {
         // Authoritative active members list
         const cleanMembers = incomingMembers;
 
-        await Promise.all([
+        const [savedMembersBlob, savedDeletedBlob] = await Promise.all([
           put('members.json', JSON.stringify(cleanMembers, null, 2), {
             access: 'public',
             addRandomSuffix: false,
@@ -128,6 +163,20 @@ export default async function handler(req: any, res: any) {
             allowOverwrite: true,
           }),
         ]);
+
+        // Clean up older blobs with identical pathname if multiple exist
+        try {
+          const staleUrls: string[] = [];
+          memberBlobs.forEach((b) => {
+            if (b.url !== savedMembersBlob.url) staleUrls.push(b.url);
+          });
+          deletedBlobs.forEach((b) => {
+            if (b.url !== savedDeletedBlob.url) staleUrls.push(b.url);
+          });
+          if (staleUrls.length > 0) {
+            await del(staleUrls);
+          }
+        } catch {}
 
         return res.status(200).json({
           success: true,
