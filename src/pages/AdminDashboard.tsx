@@ -1598,18 +1598,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         {/* TAB 2: MEMBER MANAGEMENT */}
         {activeTab === 'members' && (
           <div>
-            <div className="glass-panel member-directory-filter-bar" style={{ padding: '16px 20px', marginBottom: '20px' }}>
+            <div className="glass-panel member-directory-filter-bar" style={{ padding: '14px 18px', marginBottom: '14px' }}>
               <div className="member-search-group">
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', width: '100%' }}>
                   <input
                     type="text"
-                    className="form-input"
+                    id="admin-member-search-input"
+                    className="form-input member-search-input input-with-icon-left"
                     placeholder="Search student name, email, or desk..."
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
-                    style={{ paddingLeft: '38px', width: '100%' }}
+                    style={{ paddingLeft: '44px', width: '100%' }}
                   />
-                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                  <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }} />
                 </div>
 
                 <select

@@ -1214,14 +1214,19 @@ input, select, textarea {
   .member-directory-filter-bar {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 12px !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    padding: 14px 14px !important;
+    margin-bottom: 12px !important;
+    height: auto !important;
+    min-height: auto !important;
   }
 
   .member-search-group {
     flex-direction: column !important;
     align-items: stretch !important;
     width: 100% !important;
-    gap: 10px !important;
+    gap: 8px !important;
   }
 
   .member-search-group > div {
@@ -1240,7 +1245,8 @@ input, select, textarea {
     width: 100% !important;
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
+    gap: 8px !important;
+    margin-top: 2px !important;
   }
 
   .member-action-buttons-group button {
@@ -1400,9 +1406,17 @@ input, select, textarea {
     font-size: 0.76rem !important;
   }
 
-  .member-action-buttons-group {
-    grid-template-columns: 1fr !important;
+  .member-directory-filter-bar {
+    padding: 12px 10px !important;
     gap: 8px !important;
+    margin-bottom: 10px !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  .member-action-buttons-group {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
   }
 
   .student-mobile-card {
@@ -1423,6 +1437,12 @@ input, select, textarea {
     padding: 8px 10px !important;
   }
 
+  .input-with-icon-left,
+  .member-search-input,
+  input.has-left-icon {
+    padding-left: 44px !important;
+  }
+
   .btn-gold, .btn-primary, .btn-outline, .btn-danger, .btn-success {
     font-size: 0.8rem !important;
     padding: 7px 11px !important;
@@ -1435,6 +1455,7 @@ input, select, textarea {
 
 /* Input with Left/Right Icons - Guaranteed spacing across all screen sizes */
 .input-with-icon-left,
+.member-search-input,
 input.has-left-icon {
   padding-left: 44px !important;
 }
