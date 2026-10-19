@@ -714,16 +714,24 @@ export const DataService = {
 
     let list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
 
-    // Filter out any members that were deleted
-    list = list.filter((m) => {
-      const id = (m.id || '').toLowerCase().trim();
-      const email = (m.email || '').toLowerCase().trim();
-      return !deletedSet.has(id) && !deletedSet.has(email);
-    });
-    
-    // Automatically merge any newly added seed members UNLESS they were deleted by the admin!
+    // Active members in local storage must NEVER be deleted by stale tombstones
     const existingEmails = new Set(list.map((m) => (m.email || '').toLowerCase().trim()));
     const existingIds = new Set(list.map((m) => (m.id || '').toLowerCase().trim()));
+
+    // Clean deletedSet to unblock any actively registered member
+    let cleanedDeleted = false;
+    deletedList.forEach((item) => {
+      const clean = (item || '').toLowerCase().trim();
+      if (existingEmails.has(clean) || existingIds.has(clean)) {
+        deletedSet.delete(clean);
+        cleanedDeleted = true;
+      }
+    });
+    if (cleanedDeleted) {
+      saveLocal(KEYS.DELETED_MEMBERS, Array.from(deletedSet));
+    }
+
+    // Automatically merge any newly added seed members UNLESS they were deleted by the admin!
     let hasNewSeed = false;
     for (const seed of INITIAL_MEMBERS) {
       const seedEmail = (seed.email || '').toLowerCase().trim();
@@ -829,56 +837,74 @@ export const DataService = {
         } catch {}
       }
 
-      // Merge local and cloud deleted records
-      const localDeleted = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
-      const allDeletedSet = new Set<string>([
-        ...localDeleted.map((s) => (s || '').toLowerCase().trim()),
-        ...cloudDeletedIds.map((s) => (s || '').toLowerCase().trim()),
-      ]);
-      saveLocal(KEYS.DELETED_MEMBERS, Array.from(allDeletedSet));
-
       if (cloudList) {
         const localList = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+
+        // Identify all actively registered member IDs and emails across local and cloud
+        const activeIds = new Set<string>();
+        const activeEmails = new Set<string>();
+        localList.forEach((m) => {
+          if (m.id) activeIds.add(m.id.toLowerCase().trim());
+          if (m.email) activeEmails.add(m.email.toLowerCase().trim());
+        });
+        cloudList.forEach((m) => {
+          if (m.id) activeIds.add(m.id.toLowerCase().trim());
+          if (m.email) activeEmails.add(m.email.toLowerCase().trim());
+        });
+
+        // Purge any active members from tombstone deleted list so they are NEVER blocked
+        const localDeleted = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+        const allDeletedSet = new Set<string>();
+        [...localDeleted, ...cloudDeletedIds].forEach((s) => {
+          const clean = (s || '').toLowerCase().trim();
+          if (clean && !activeIds.has(clean) && !activeEmails.has(clean)) {
+            allDeletedSet.add(clean);
+          }
+        });
+        saveLocal(KEYS.DELETED_MEMBERS, Array.from(allDeletedSet));
+
         const mergedMap = new Map<string, MemberProfile>();
 
-        // Add initial members (skipping deleted)
+        // 1. Initial seed members (skipping deleted)
         INITIAL_MEMBERS.forEach((m) => {
           const id = (m.id || '').toLowerCase().trim();
           const email = (m.email || '').toLowerCase().trim();
           if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
-            mergedMap.set(email, m);
+            mergedMap.set(id || email, m);
           }
         });
 
-        // Add local members (skipping deleted)
+        // 2. Add local members (authoritative for recent additions on this client)
         localList.forEach((m) => {
           const id = (m.id || '').toLowerCase().trim();
           const email = (m.email || '').toLowerCase().trim();
           if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
-            mergedMap.set(email, m);
+            mergedMap.set(id || email, m);
           }
         });
 
-        // Merge cloud members (authoritative, skipping deleted, preserving persistent avatars)
+        // 3. Merge cloud members (preserve persistent avatars and local updates)
         cloudList.forEach((m) => {
           const id = (m.id || '').toLowerCase().trim();
           const email = (m.email || '').toLowerCase().trim();
           if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
-            const existing = mergedMap.get(email);
+            const key = id || email;
+            const existing = mergedMap.get(key);
             const persistedAvatar = this.getLocalAvatar(m.id || existing?.id || '');
             const avatarUrl = m.avatarUrl || existing?.avatarUrl || persistedAvatar || '';
-            mergedMap.set(email, {
+            mergedMap.set(key, {
               ...existing,
               ...m,
               avatarUrl,
             });
-          } else {
-            mergedMap.delete(email);
           }
         });
 
         const mergedArray = Array.from(mergedMap.values());
         saveLocal(KEYS.MEMBERS, mergedArray);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('hikmah_members_synced', { detail: mergedArray }));
+        }
         return mergedArray;
       }
     } catch (e) {
@@ -917,8 +943,25 @@ export const DataService = {
         console.warn('Firebase getMembers query error, falling back to local store:', err);
       }
     }
-    if (list.length === 0) {
-      list = this.getLocalMembersSync();
+
+    // Merge Firestore list with local members so newly added local members are NEVER lost
+    const localMembers = this.getLocalMembersSync();
+    if (list.length > 0) {
+      const memberMap = new Map<string, MemberProfile>();
+      localMembers.forEach((m) => {
+        const key = (m.id || m.email || '').toLowerCase().trim();
+        if (key) memberMap.set(key, m);
+      });
+      list.forEach((m) => {
+        const key = (m.id || m.email || '').toLowerCase().trim();
+        if (key) {
+          const existing = memberMap.get(key);
+          memberMap.set(key, { ...existing, ...m });
+        }
+      });
+      list = Array.from(memberMap.values());
+    } else {
+      list = localMembers;
     }
 
     // Trigger non-blocking background sync if in browser
@@ -966,16 +1009,24 @@ export const DataService = {
   async addMember(member: Omit<MemberProfile, 'id'>, adminName: string): Promise<MemberProfile> {
     const members = await this.getMembers();
     
-    // Auto-generate next unique Member ID: e.g. HIK-2025-006
+    // Auto-generate next unique Member ID across ALL active and historical IDs
     const year = new Date().getFullYear();
-    const highestNum = members.reduce((max, m) => {
-      const match = m.id.match(/HIK-\d+-(\d+)/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        return num > max ? num : max;
+    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+    const allKnownIds = [
+      ...members.map((m) => m.id),
+      ...deletedList,
+      ...INITIAL_MEMBERS.map((m) => m.id),
+    ];
+    let highestNum = 0;
+    for (const rawId of allKnownIds) {
+      if (typeof rawId === 'string') {
+        const match = rawId.match(/HIK-\d+-(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > highestNum) highestNum = num;
+        }
       }
-      return max;
-    }, 0);
+    }
     const nextSeq = String(highestNum + 1).padStart(3, '0');
     const newId = `HIK-${year}-${nextSeq}`;
 
@@ -999,8 +1050,7 @@ export const DataService = {
     const updated = [...members, newMember];
     saveLocal(KEYS.MEMBERS, updated);
 
-    // Clear from deleted list if re-added
-    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+    // Unblock this new member from deletedList both locally and on cloud
     const cleanEmail = (member.email || '').toLowerCase().trim();
     const cleanId = newId.toLowerCase().trim();
     const filteredDeleted = deletedList.filter((s) => {
@@ -1009,14 +1059,20 @@ export const DataService = {
     });
     saveLocal(KEYS.DELETED_MEMBERS, filteredDeleted);
 
-    this.pushMembersToCloud(updated);
+    // Persist to Vercel Blob cloud storage immediately and await completion
+    await this.pushMembersToCloud(updated);
 
     if (this.isLiveFirebase() && db) {
       try {
-        await setDoc(doc(db, 'member_profiles', newId), newMember);
+        await setDoc(doc(db, 'member_profiles', newId), newMember, { merge: true });
       } catch (err) {
         console.warn('Firebase addMember sync error:', err);
       }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hikmah_member_updated', { detail: newMember }));
+      window.dispatchEvent(new CustomEvent('storage'));
     }
 
     await this.addAuditLog(

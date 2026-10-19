@@ -100,17 +100,21 @@ export default async function handler(req: any, res: any) {
 
       if (action === 'save_all' || Array.isArray(body?.members)) {
         const incomingMembers = Array.isArray(body?.members) ? body.members : currentMembers;
-        if (Array.isArray(body?.deletedIds)) {
-          deletedIds = Array.from(new Set([...deletedIds, ...body.deletedIds]));
-        }
+        
+        // Members in incomingMembers are explicitly active!
+        const activeIds = new Set(incomingMembers.map((m: any) => (m.id || '').toLowerCase().trim()));
+        const activeEmails = new Set(incomingMembers.map((m: any) => (m.email || '').toLowerCase().trim()));
 
-        // Exclude any deleted members from incomingMembers
-        const delSet = new Set(deletedIds.map((s) => s.toLowerCase().trim()));
-        const cleanMembers = incomingMembers.filter((m: any) => {
-          const mId = (m.id || '').toLowerCase().trim();
-          const mEmail = (m.email || '').toLowerCase().trim();
-          return !delSet.has(mId) && !delSet.has(mEmail);
+        // Clean out any active member IDs or emails from deletedIds so they are never blocked
+        let allDeleted = Array.isArray(body?.deletedIds) ? body.deletedIds : deletedIds;
+        allDeleted = Array.from(new Set([...deletedIds, ...allDeleted]));
+        deletedIds = allDeleted.filter((idOrEmail: string) => {
+          const clean = (idOrEmail || '').toLowerCase().trim();
+          return clean && !activeIds.has(clean) && !activeEmails.has(clean);
         });
+
+        // Authoritative active members list
+        const cleanMembers = incomingMembers;
 
         await Promise.all([
           put('members.json', JSON.stringify(cleanMembers, null, 2), {

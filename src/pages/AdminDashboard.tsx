@@ -331,6 +331,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   useEffect(() => {
     loadData();
 
+    const handleMembersUpdated = () => {
+      loadData();
+    };
+    window.addEventListener('hikmah_members_synced', handleMembersUpdated);
+    window.addEventListener('hikmah_member_updated', handleMembersUpdated);
+    window.addEventListener('hikmah_member_deleted', handleMembersUpdated);
+
     // Check if user arrived via Email Handover Verification Link
     try {
       const search = new URLSearchParams(window.location.search);
@@ -346,6 +353,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         }
       }
     } catch {}
+
+    return () => {
+      window.removeEventListener('hikmah_members_synced', handleMembersUpdated);
+      window.removeEventListener('hikmah_member_updated', handleMembersUpdated);
+      window.removeEventListener('hikmah_member_deleted', handleMembersUpdated);
+    };
   }, []);
 
   // ---------------- FACILITY & RULE ACTION HANDLERS ----------------
