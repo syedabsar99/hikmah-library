@@ -65,14 +65,6 @@ export default async function handler(req: any, res: any) {
         success: true,
         members: currentMembers,
         deletedIds: deletedIds,
-        debug: {
-          memberBlobs: memberBlobs.map((b) => ({
-            url: b.url,
-            downloadUrl: b.downloadUrl,
-            uploadedAt: b.uploadedAt,
-            size: b.size,
-          })),
-        },
       });
     }
 
@@ -191,7 +183,6 @@ export default async function handler(req: any, res: any) {
           count: cleanMembers.length,
           members: cleanMembers,
           deletedIds,
-          savedMembersBlob,
         });
       }
 
