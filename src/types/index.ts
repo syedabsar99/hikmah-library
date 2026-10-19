@@ -59,6 +59,7 @@ export interface MemberProfile {
   notes?: string;
   avatarUrl?: string;
   passcode?: string; // Member password / passcode
+  hasRegistered?: boolean; // True once student completes first-time portal registration
   cancellationReason?: string;
   cancelledAt?: string;
   cancelledBy?: string;

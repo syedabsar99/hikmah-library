@@ -8,7 +8,6 @@ import {
   UserCheck,
   Lock,
   Mail,
-  Phone,
   AlertTriangle,
   ArrowLeft,
   Eye,
@@ -49,13 +48,13 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
 
   // First-Time Registration State (Directory-Gated)
   const [regEmail, setRegEmail] = useState('');
-  const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regLoading, setRegLoading] = useState(false);
+  const [unregisteredEmailPrompt, setUnregisteredEmailPrompt] = useState<string | null>(null);
 
   // Email Password Reset Modal State
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -65,19 +64,58 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
     e.preventDefault();
     setError(null);
     setSuccessMessage(null);
+    setUnregisteredEmailPrompt(null);
     setLoading(true);
 
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please enter your registered student email address.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const result = await loginMember(email, password);
+      // 1. Verify if this student is enrolled in the library directory
+      const member = await DataService.getMemberByEmail(cleanEmail);
+      if (!member) {
+        setError(
+          `Email "${cleanEmail}" is not registered in the Hikmah Library member directory. Please verify your admission email or contact library administration to enroll.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 2. Check if the student has not registered / configured a password yet
+      if (!member.passcode && !member.hasRegistered) {
+        setUnregisteredEmailPrompt(cleanEmail);
+        setError(
+          `Welcome, ${member.fullName}! You are enrolled in the library directory, but you must register and set your password first before signing in.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 3. Attempt authentication
+      const result = await loginMember(cleanEmail, password);
       if (result.success) {
-        if (email.trim()) {
-          try {
-            localStorage.setItem('hikmah_saved_member_email', email.trim().toLowerCase());
-          } catch {}
-        }
+        try {
+          localStorage.setItem('hikmah_saved_member_email', cleanEmail);
+        } catch {}
         onSuccess();
       } else {
-        setError(result.error || 'Failed to authenticate student. Verify your registered email address and password.');
+        if (
+          result.error &&
+          (result.error.includes('No password has been configured') ||
+            result.error.includes('user-not-found') ||
+            result.error.includes('not recognized'))
+        ) {
+          setUnregisteredEmailPrompt(cleanEmail);
+          setError(
+            `Welcome, ${member.fullName}! You are enrolled in the directory, but you must register and choose your password first.`
+          );
+        } else {
+          setError(result.error || 'Failed to authenticate student. Verify your registered email address and password.');
+        }
       }
     } catch {
       setError('An error occurred during member authentication.');
@@ -86,26 +124,20 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
     }
   };
 
-  // Handle Student Account Activation (Directory-Gated)
+  // Handle Student Account Registration (Directory-Gated)
   const handleActivationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError(null);
 
     const cleanEmail = regEmail.trim().toLowerCase();
-    const cleanPhone = regPhone.replace(/\D/g, '').slice(-10);
 
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setRegError('Please provide your valid student email address registered during admission.');
-      return;
-    }
-
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      setRegError('Please provide your valid 10-digit mobile contact number registered during admission.');
+    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setRegError('Please provide the valid student email address registered during your admission.');
       return;
     }
 
     if (!regPassword) {
-      setRegError('Please choose a password for your portal account.');
+      setRegError('Please choose a password for your student portal account.');
       return;
     }
 
@@ -122,67 +154,61 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
     setRegLoading(true);
 
     try {
-      // 1. Check if member exists in the directory or auto-provision
-      let member = await DataService.getMemberByEmail(cleanEmail);
+      // 1. Check directory strictly - DO NOT auto-provision unknown emails!
+      const member = await DataService.getMemberByEmail(cleanEmail);
       if (!member) {
-        // Auto-provision student profile into directory & cloud
-        const emailName = cleanEmail.split('@')[0].replace(/[._-]/g, ' ');
-        const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        member = await DataService.addMember(
-          {
-            uid: `uid-${Date.now()}`,
-            fullName: formattedName,
-            email: cleanEmail,
-            phoneNumber: `+91 ${cleanPhone}`,
-            registrationDate: new Date().toISOString().split('T')[0],
-            joiningDate: new Date().toISOString().split('T')[0],
-            membershipStatus: 'Active',
-            batch: '24/7 Dedicated Access (No Shifts)',
-            studyTarget: 'Competitive Exams / Higher Studies',
-            seatNumber: 'Assigned Desk',
-            warningCount: 0,
-            feeDueDate: '2026-11-18',
-            feeStatus: 'Paid',
-            monthlyFee: 1200,
-            lastPaidDate: new Date().toISOString().split('T')[0],
-            feeReminders: [],
-            passcode: regPassword,
-            notes: 'Student registered via portal.',
-          },
-          'Student Portal Registration'
+        setRegError(
+          `Email "${cleanEmail}" is not registered in the Hikmah Library directory. Please use the exact email address the administrator registered for you during admission, or contact the front desk to enroll first.`
         );
-      } else {
-        // Ensure student phone is recorded or updated
-        const memberCleanPhone = (member.phoneNumber || '').replace(/\D/g, '').slice(-10);
-        if (cleanPhone && cleanPhone.length === 10 && (!memberCleanPhone || memberCleanPhone.length < 10)) {
-          await DataService.updateMember(member.id, { phoneNumber: `+91 ${cleanPhone}` }, 'Student Phone Update');
-        }
+        setRegLoading(false);
+        return;
       }
 
       // 2. Commit new password to Firebase Auth if configured, and to member profile
       const auth = getFirebaseAuth();
+      let userUid = member.uid;
       if (auth && isFirebaseConfigured()) {
         try {
           const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, regPassword);
-          await DataService.updateMember(member.id, { passcode: regPassword, uid: userCred.user.uid }, 'Student Activation & UID Sync');
+          userUid = userCred.user.uid;
+          await DataService.updateMember(
+            member.id,
+            { passcode: regPassword, uid: userUid, hasRegistered: true },
+            'Student First-Time Registration & UID Sync'
+          );
         } catch (fbErr: any) {
           if (fbErr?.code === 'auth/email-already-in-use') {
             await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
+            await DataService.updateMember(
+              member.id,
+              { passcode: regPassword, hasRegistered: true },
+              'Student Password Update'
+            );
           } else {
             console.warn('Firebase account activation notice:', fbErr);
             await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
+            await DataService.updateMember(
+              member.id,
+              { passcode: regPassword, hasRegistered: true },
+              'Student Password Update'
+            );
           }
         }
       } else {
         const updated = await DataService.updateMemberPasswordByEmail(cleanEmail, regPassword);
         if (!updated) {
-          setRegError('Failed to activate account. Please try again or contact administration.');
+          setRegError('Failed to configure password. Please try again or contact administration.');
           setRegLoading(false);
           return;
         }
+        await DataService.updateMember(
+          member.id,
+          { passcode: regPassword, hasRegistered: true },
+          'Student Password Update'
+        );
       }
 
-      // 4. Success - prepopulate sign in form and return student to login view
+      // 3. Success - Pre-fill sign in form and return student to login view
       setEmail(cleanEmail);
       setPassword(regPassword);
       try {
@@ -190,14 +216,14 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
       } catch {}
 
       setSuccessMessage(
-        `Account activated successfully for ${member.fullName}! Your password has been configured. Please sign in below.`
+        `Registration complete for ${member.fullName}! Your password has been configured. Please click "Sign In to Student Portal" below.`
       );
       setRegPassword('');
       setRegConfirmPassword('');
-      setRegPhone('');
+      setUnregisteredEmailPrompt(null);
       setMode('login');
     } catch {
-      setRegError('An unexpected error occurred during student activation. Please try again.');
+      setRegError('An unexpected error occurred during student registration. Please try again.');
     } finally {
       setRegLoading(false);
     }
@@ -273,6 +299,51 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
               </p>
             </div>
 
+            {/* First-Time Notice Banner */}
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px 14px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', color: '#FEF3C7' }}>
+                <UserPlus size={16} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+                <span>First time logging in after admission?</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('register');
+                  setError(null);
+                  setSuccessMessage(null);
+                  setRegEmail(email);
+                }}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  color: 'var(--accent-gold)',
+                  fontWeight: '700',
+                  fontSize: '0.78rem',
+                  padding: '5px 12px',
+                  borderRadius: 'var(--radius-pill)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                Register &amp; Set Password →
+              </button>
+            </div>
+
             {/* Success Message */}
             {successMessage && (
               <div
@@ -302,18 +373,44 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                   background: 'rgba(239, 68, 68, 0.15)',
                   border: '1px solid #EF4444',
                   color: '#FCA5A5',
-                  padding: '12px 16px',
+                  padding: '14px 16px',
                   borderRadius: 'var(--radius-md)',
                   fontSize: '0.85rem',
                   marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
                   lineHeight: '1.5',
                 }}
               >
-                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#EF4444' }} />
-                <div>{error}</div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#EF4444' }} />
+                  <div>{error}</div>
+                </div>
+
+                {unregisteredEmailPrompt && (
+                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                    <button
+                      type="button"
+                      className="btn-gold"
+                      onClick={() => {
+                        setMode('register');
+                        setRegEmail(unregisteredEmailPrompt);
+                        setError(null);
+                        setUnregisteredEmailPrompt(null);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '9px 16px',
+                        fontSize: '0.86rem',
+                        fontWeight: '700',
+                        justifyContent: 'center',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      <UserPlus size={16} /> Register &amp; Set Your Password Now
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -446,7 +543,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
         )}
 
         {/* ============================================================== */}
-        {/* VIEW 2: FIRST-TIME STUDENT ACTIVATION (DIRECTORY-GATED)        */}
+        {/* VIEW 2: FIRST-TIME STUDENT REGISTRATION (DIRECTORY-GATED)     */}
         {/* ============================================================== */}
         {mode === 'register' && (
           <div>
@@ -468,10 +565,10 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                 <UserPlus size={32} />
               </div>
               <h2 style={{ fontSize: 'clamp(1.3rem, 4vw, 1.55rem)', color: '#F8FAFC', marginBottom: '6px', fontWeight: '800' }}>
-                Student Account Activation
+                First-Time Student Registration
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: '1.5' }}>
-                Strictly restricted to enrolled students. Verify your admission details to configure your private password.
+                Enter the email address registered by the library administrator to choose your portal password.
               </p>
             </div>
 
@@ -513,12 +610,12 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                 }}
               >
                 <ShieldCheck size={18} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
-                <span>Only registered emails and contact numbers in the directory can open an account.</span>
+                <span>Only student email addresses pre-registered in the library directory can set up an account.</span>
               </div>
 
               <div className="form-group" style={{ marginBottom: '16px' }}>
                 <label className="form-label" style={{ color: '#E2E8F0' }}>
-                  Registered Student Email *
+                  Registered Student Email Address *
                 </label>
                 <div style={{ position: 'relative' }}>
                   <input
@@ -527,40 +624,25 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                     className="form-input input-with-icon-left"
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="e.g. bilal.ahmed@example.com"
+                    placeholder="e.g. yourname@example.com"
                     required
                   />
                   <Mail size={18} className="form-icon-left" />
                 </div>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ color: '#E2E8F0' }}>
-                  Registered Contact Phone Number *
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="tel"
-                    id="member-reg-phone-input"
-                    className="form-input input-with-icon-left"
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="10-digit registered number (e.g. 9876543210)"
-                    required
-                  />
-                  <Phone size={18} className="form-icon-left" />
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Must match the exact email address the administrator enrolled in the member directory.
                 </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ color: '#E2E8F0' }}>Create Password *</label>
+                <label className="form-label" style={{ color: '#E2E8F0' }}>Choose New Password *</label>
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showRegPassword ? 'text' : 'password'}
                     className="form-input input-with-icon-left input-with-icon-right"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
+                    placeholder="Enter a secure password (min 6 characters)"
                     required
                   />
                   <Lock size={18} className="form-icon-left" />
@@ -626,7 +708,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                   background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                 }}
               >
-                {regLoading ? 'Verifying Admission Directory...' : 'Verify Admission & Activate Account'}
+                {regLoading ? 'Verifying Admission Directory...' : 'Register & Set Password'}
               </button>
             </form>
 
@@ -640,7 +722,7 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
               }}
             >
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '6px' }}>
-                Already configured your password?
+                Already registered your password?
               </div>
               <button
                 type="button"

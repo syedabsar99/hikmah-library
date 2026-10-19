@@ -1598,20 +1598,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         {/* TAB 2: MEMBER MANAGEMENT */}
         {activeTab === 'members' && (
           <div>
-            <div
-              className="glass-panel"
-              style={{
-                padding: '16px 20px',
-                marginBottom: '20px',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '14px',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
-                <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 0 }}>
+            <div className="glass-panel member-directory-filter-bar" style={{ padding: '16px 20px', marginBottom: '20px' }}>
+              <div className="member-search-group">
+                <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     className="form-input"
@@ -1620,14 +1609,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                     onChange={(e) => setMemberSearch(e.target.value)}
                     style={{ paddingLeft: '38px', width: '100%' }}
                   />
-                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: '#94A3B8' }} />
+                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                 </div>
 
                 <select
                   className="form-select"
                   value={memberStatusFilter}
                   onChange={(e) => setMemberStatusFilter(e.target.value)}
-                  style={{ flex: '1 1 140px', minWidth: 0 }}
                 >
                   <option value="All">All Statuses</option>
                   <option value="Active">Active Only</option>
@@ -1637,11 +1625,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', width: 'auto' }}>
-                <button className="btn-outline" onClick={handleExportMembers} style={{ flex: '1 1 auto' }}>
+              <div className="member-action-buttons-group">
+                <button className="btn-outline" onClick={handleExportMembers}>
                   <Download size={16} /> Export CSV
                 </button>
-                <button className="btn-gold" onClick={() => setShowAddMemberModal(true)} style={{ flex: '1 1 auto' }}>
+                <button className="btn-gold" onClick={() => setShowAddMemberModal(true)}>
                   <Plus size={16} /> Register New Member
                 </button>
               </div>

@@ -967,6 +967,40 @@ input, select, textarea {
   flex-wrap: wrap;
 }
 
+/* Member Directory Filter Bar Desktop Styles */
+.member-directory-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.member-search-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.member-search-group > div {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.member-search-group select {
+  flex: 0 0 160px;
+  min-width: 140px;
+}
+
+.member-action-buttons-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 /* Large Tablet and Below (<= 992px) */
 @media (max-width: 992px) {
   .nav-admin-contacts-bar {
@@ -1176,6 +1210,43 @@ input, select, textarea {
     font-size: 0.8rem !important;
     justify-content: center !important;
   }
+
+  .member-directory-filter-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .member-search-group {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .member-search-group > div {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: none !important;
+  }
+
+  .member-search-group select {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: none !important;
+  }
+
+  .member-action-buttons-group {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  .member-action-buttons-group button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
 }
 
 /* Small Smartphone (<= 480px) */
@@ -1327,6 +1398,11 @@ input, select, textarea {
   .member-header-actions-bar > button {
     padding: 7px 10px !important;
     font-size: 0.76rem !important;
+  }
+
+  .member-action-buttons-group {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
   }
 
   .student-mobile-card {
