@@ -47,9 +47,9 @@ const KEYS = {
 const INITIAL_MEMBERS: MemberProfile[] = [
   {
     id: 'HIK-2026-001',
-    uid: 'mem-real-001',
+    uid: '4BOkJxfKzYfGiOhpgeAmVbQQDZN2',
     fullName: 'Syed Absar',
-    email: 'syedabsarmia@gmail.com',
+    email: 'syedabsemia@gmail.com',
     phoneNumber: '+919622497807',
     registrationDate: '2026-10-18',
     joiningDate: '2026-10-18',
@@ -131,6 +131,48 @@ const INITIAL_MEMBERS: MemberProfile[] = [
       },
     ],
     passcode: 'Aman@123',
+    hasRegistered: true,
+    notes: 'Registered member',
+  },
+  {
+    id: 'HIK-2026-031',
+    uid: 'JVoQb6txHyX8Tg0ZgAVKujykqfl2',
+    fullName: 'syed noor ul absar',
+    email: 'absarsyed804@gmail.com',
+    phoneNumber: '9622497805',
+    registrationDate: '2026-10-20',
+    joiningDate: '2026-10-01',
+    membershipStatus: 'Active',
+    batch: '24/7 Dedicated Access (No Shifts)',
+    studyTarget: 'KAS',
+    seatNumber: 'D-333',
+    warningCount: 0,
+    feeDueDate: '2026-11-01',
+    feeStatus: 'Paid',
+    monthlyFee: 1000,
+    feeReminders: [],
+    passcode: 'Absar@123',
+    hasRegistered: true,
+    notes: 'Registered member',
+  },
+  {
+    id: 'HIK-2026-032',
+    uid: 'uid-1792516775439-rw32q',
+    fullName: 'syed insha bukhari',
+    email: 'practicejs277@gmail.com',
+    phoneNumber: '9622497805',
+    registrationDate: '2026-10-20',
+    joiningDate: '2026-10-20',
+    membershipStatus: 'Active',
+    batch: '24/7 Dedicated Access (No Shifts)',
+    studyTarget: 'UPSC Civil Services Examination',
+    seatNumber: 'D-99',
+    warningCount: 0,
+    feeDueDate: '2026-11-20',
+    feeStatus: 'Paid',
+    monthlyFee: 1000,
+    feeReminders: [],
+    passcode: 'Insha@123',
     hasRegistered: true,
     notes: 'Registered member',
   },
@@ -1986,9 +2028,17 @@ export const DataService = {
     });
     saveLocal(KEYS.CHAT_MESSAGES, valid);
 
-    const normViewerId = viewerId.toLowerCase();
+    const normViewerId = (viewerId || '').trim().toLowerCase();
     const unread = valid.filter((m) => {
-      const isRecipient = (m.recipientId || '').toLowerCase() === normViewerId || (viewerUid && m.recipientUid === viewerUid);
+      const sId = (m.senderId || '').trim().toLowerCase();
+      const rId = (m.recipientId || '').trim().toLowerCase();
+
+      // SENDER RULE: Sender's own sent messages are NEVER unread for the sender!
+      const isSender = sId === normViewerId;
+      if (isSender) return false;
+
+      // RECIPIENT RULE: Message is unread only if this viewer is the intended recipient
+      const isRecipient = rId === normViewerId || Boolean(viewerUid && m.recipientUid && m.recipientUid === viewerUid && sId !== normViewerId);
       return isRecipient && m.status !== 'seen';
     });
     const bySender: Record<string, number> = {};
@@ -2002,9 +2052,35 @@ export const DataService = {
   },
 
   async sendChatMessage(message: Omit<ChatMessage, 'id' | 'timestamp' | 'expiresAt' | 'status'> & { status?: 'sent' | 'delivered' | 'seen'; senderUid?: string; recipientUid?: string }): Promise<ChatMessage> {
-    const sUid = message.senderUid || '';
-    const rUid = message.recipientUid || '';
-    const participantUids = [sUid, rUid].filter(Boolean);
+    let sUid = (message.senderUid || '').trim();
+    let rUid = (message.recipientUid || '').trim();
+
+    const sId = (message.senderId || '').trim().toLowerCase();
+    const rId = (message.recipientId || '').trim().toLowerCase();
+
+    // If recipientUid is missing or cross-contaminated with senderUid, resolve true recipient UID from directory
+    if ((!rUid || (rUid === sUid && sId !== rId)) && rId) {
+      const localM = this.getLocalMembersSync().find((m) => (m.id || '').trim().toLowerCase() === rId);
+      if (localM?.uid) {
+        rUid = localM.uid;
+      } else {
+        const dir = loadLocal<MemberDirectoryItem[]>(KEYS.MEMBER_DIRECTORY, []);
+        const dirM = dir.find((d) => (d.id || '').trim().toLowerCase() === rId);
+        if (dirM?.uid) {
+          rUid = dirM.uid;
+        }
+      }
+    }
+
+    // If senderUid is missing, resolve true sender UID from directory
+    if (!sUid && sId) {
+      const localM = this.getLocalMembersSync().find((m) => (m.id || '').trim().toLowerCase() === sId);
+      if (localM?.uid) {
+        sUid = localM.uid;
+      }
+    }
+
+    const participantUids = Array.from(new Set([sUid, rUid].filter(Boolean)));
 
     const newMessage: ChatMessage = {
       ...message,
@@ -2015,7 +2091,7 @@ export const DataService = {
       timestamp: new Date().toISOString(),
       // Auto-expires in 12 hours
       expiresAt: new Date(Date.now() + 12 * 3600 * 1000).toISOString(),
-      status: message.status || 'delivered',
+      status: 'delivered', // Messages ALWAYS initialize as 'delivered' (grey double ticks)
     };
 
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
@@ -2044,18 +2120,25 @@ export const DataService = {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     let changed = false;
     const normSessionId = (sessionId || '').toLowerCase();
-    const normViewerId = (viewerId || '').toLowerCase();
-    const normPeerId = (peerId || '').toLowerCase();
+    const normViewerId = (viewerId || '').trim().toLowerCase();
+    const normPeerId = (peerId || '').trim().toLowerCase();
     const parts = normSessionId.split('--');
-    const p1 = parts[0];
-    const p2 = parts[1];
+    const p1 = parts[0]?.trim()?.toLowerCase();
+    const p2 = parts[1]?.trim()?.toLowerCase();
 
     const updated = all.map((m) => {
-      const sId = (m.senderId || '').toLowerCase();
-      const rId = (m.recipientId || '').toLowerCase();
+      const sId = (m.senderId || '').trim().toLowerCase();
+      const rId = (m.recipientId || '').trim().toLowerCase();
       const mSess = (m.sessionId || '').toLowerCase();
 
-      const isRecipient = rId === normViewerId || (viewerUid && m.recipientUid === viewerUid);
+      // SENDER RULE: Sender viewing chat MUST NEVER mark their own sent message as seen!
+      const isSender = sId === normViewerId;
+      if (isSender) {
+        return m;
+      }
+
+      // RECIPIENT RULE: Only the recipient viewing the message can mark it as seen!
+      const isRecipient = rId === normViewerId || Boolean(viewerUid && m.recipientUid && m.recipientUid === viewerUid && sId !== normViewerId);
       const isForThisSession = mSess === normSessionId ||
         (p1 && p2 && ((sId === p1 && rId === p2) || (sId === p2 && rId === p1))) ||
         (normPeerId && sId === normPeerId && isRecipient);
@@ -2083,10 +2166,13 @@ export const DataService = {
 
   async markAllMessagesRead(viewerId: string, viewerUid?: string): Promise<void> {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
-    const normViewerId = (viewerId || '').toLowerCase();
+    const normViewerId = (viewerId || '').trim().toLowerCase();
     let changed = false;
     const updated = all.map((m) => {
-      const isRecipient = (m.recipientId || '').toLowerCase() === normViewerId || (viewerUid && m.recipientUid === viewerUid);
+      const sId = (m.senderId || '').trim().toLowerCase();
+      if (sId === normViewerId) return m; // SENDER CAN NEVER MARK OWN MESSAGES READ
+
+      const isRecipient = (m.recipientId || '').trim().toLowerCase() === normViewerId || Boolean(viewerUid && m.recipientUid && m.recipientUid === viewerUid && sId !== normViewerId);
       if (isRecipient && m.status !== 'seen') {
         changed = true;
         if (this.isLiveFirebase() && db) {

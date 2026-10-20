@@ -2353,6 +2353,71 @@ async function runTests() {
   const isWrongMatch = muneer?.passcode === wrongPasscode.trim();
   assert(isWrongMatch === false, 'Incorrect password does not match registered passcode');
 
+  // ==========================================
+  // SUITE 32: Private Chat Read Receipts, Sender Exemption & Unread Alert Banner Synchronization
+  // ==========================================
+  console.log('\nSuite 32: Private Chat Read Receipts, Sender Exemption & Unread Alert Banner Synchronization');
+
+  const senderMemberId = 'HIK-2026-004';
+  const recipientMemberId = 'HIK-2026-031';
+  const testSessionId = `${senderMemberId}--${recipientMemberId}`;
+  const sharedUidSimulation = 'JVoQb6txHyX8Tg0ZgAVKujykqfl2'; // Simulates same-browser testing where UIDs could collide
+
+  // 1. Sender sends a new chat message
+  const sentTestMsg = await DataService.sendChatMessage({
+    sessionId: testSessionId,
+    senderId: senderMemberId,
+    senderName: 'Muneer Maqbool',
+    recipientId: recipientMemberId,
+    senderUid: sharedUidSimulation,
+    recipientUid: sharedUidSimulation,
+    ciphertext: 'test-ciphertext-aes-gcm',
+    iv: 'test-iv-base64',
+    status: 'delivered',
+  });
+  assert(sentTestMsg.status === 'delivered', 'New chat message strictly initializes with status "delivered"');
+
+  // 2. Sender polls / reloads chat modal (calling markMessagesSeen as sender)
+  await DataService.markMessagesSeen(testSessionId, senderMemberId, sharedUidSimulation, recipientMemberId);
+  const senderMsgs = await DataService.getChatMessages(testSessionId, sharedUidSimulation);
+  const latestSenderMsg = senderMsgs.find((m) => m.id === sentTestMsg.id);
+  assert(latestSenderMsg?.status === 'delivered', 'Sender viewing or reloading chat modal MUST NOT mark own message as seen');
+
+  // 3. Sender view of double ticks remains grey/uncolored
+  const senderTick = renderTickMarks(senderMemberId, latestSenderMsg?.senderId || '', latestSenderMsg?.status || 'delivered');
+  assert(senderTick.hasTicks === true, 'Sender view renders double ticks');
+  assert(senderTick.tickType === 'double_uncolored', 'Sender view renders grey/uncolored double ticks while recipient has not opened chat');
+  assert(senderTick.color === '#94A3B8', 'Sender ticks use grey color (#94A3B8)');
+
+  // 4. Sender unread count is strictly 0
+  const senderUnread = await DataService.getUnreadChatCounts(senderMemberId, sharedUidSimulation);
+  assert(senderUnread.total === 0, 'Sender has 0 unread messages for their own sent message');
+  assert(!senderUnread.bySender[senderMemberId], 'Sender has no unread sender breakdown for self');
+
+  // 5. Recipient unread count triggers red unread message alert banner
+  const recipientUnread = await DataService.getUnreadChatCounts(recipientMemberId, sharedUidSimulation);
+  assert(recipientUnread.total >= 1, 'Recipient has unread message waiting (red banner will show)');
+  assert(recipientUnread.bySender[senderMemberId] >= 1, 'Recipient has unread count from sender Muneer Maqbool');
+
+  // 6. Recipient opens chat modal (calling markMessagesSeen as recipient)
+  await DataService.markMessagesSeen(testSessionId, recipientMemberId, sharedUidSimulation, senderMemberId);
+  const recipMsgs = await DataService.getChatMessages(testSessionId, sharedUidSimulation);
+  const latestRecipMsg = recipMsgs.find((m) => m.id === sentTestMsg.id);
+  assert(latestRecipMsg?.status === 'seen', 'Recipient viewing chat marks message status as "seen"');
+
+  // 7. Recipient unread count clears after viewing
+  const recipientUnreadAfter = await DataService.getUnreadChatCounts(recipientMemberId, sharedUidSimulation);
+  assert(recipientUnreadAfter.total === 0, 'Recipient unread count drops to 0 after viewing (red banner disappears)');
+
+  // 8. Sender's ticks turn sky-blue after recipient views message
+  const senderTickAfter = renderTickMarks(senderMemberId, latestRecipMsg?.senderId || '', latestRecipMsg?.status || 'delivered');
+  assert(senderTickAfter.hasTicks === true, 'Sender view renders double ticks after recipient reads message');
+  assert(senderTickAfter.tickType === 'double_colored', 'Sender double ticks turn blue after recipient reads message');
+  assert(senderTickAfter.color === '#38BDF8', 'Sender double ticks use sky-blue (#38BDF8)');
+
+  // Clean up test message from session
+  await DataService.clearChatSession(testSessionId);
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

@@ -432,6 +432,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Password verification with Firebase Auth if configured
     const auth = getFirebaseAuth();
     if (auth && isFirebaseConfigured()) {
+      // Clear any prior lingering session if different user
+      if (auth.currentUser && auth.currentUser.email && auth.currentUser.email.toLowerCase() !== member.email.toLowerCase()) {
+        try {
+          await signOut(auth);
+        } catch {}
+      }
       try {
         const userCred = await signInWithEmailAndPassword(auth, member.email, passcode.trim());
         if (userCred.user.uid) {
@@ -491,8 +497,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    const isMatchingAuthUser = Boolean(
+      auth?.currentUser &&
+      auth.currentUser.email &&
+      member.email &&
+      auth.currentUser.email.toLowerCase() === member.email.toLowerCase()
+    );
+    const effectiveUid = isMatchingAuthUser
+      ? auth!.currentUser!.uid
+      : (member.uid || `uid-${member.id}`);
+
     const user: CurrentUser = {
-      uid: auth?.currentUser?.uid || member.uid || `uid-${member.id}`,
+      uid: effectiveUid,
       role: 'member',
       memberId: member.id,
       name: member.fullName,
