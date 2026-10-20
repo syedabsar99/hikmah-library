@@ -1,0 +1,118 @@
+[
+  {
+    "id": "HIK-2026-001",
+    "data": {
+      "studyTarget": "Competitive Exams/Higher Studies",
+      "joiningDate": "2026-10-18",
+      "feeStatus": "Paid",
+      "warningCount": 0,
+      "email": "syedabsarmia@gmail.com",
+      "id": "HIK-2026-001",
+      "passcode": "Absar@12345",
+      "avatarUrl": "",
+      "phoneNumber": "+919622497807",
+      "feeReminders": [],
+      "notes": "Registered member",
+      "monthlyFee": 1200,
+      "feeDueDate": "2026-11-18",
+      "uid": "mem-real-001",
+      "seatNumber": "Desk B-12",
+      "membershipStatus": "Active",
+      "registrationDate": "2026-10-18",
+      "batch": "24/7 Dedicated Access (No Shifts)",
+      "fullName": "Syed Absar"
+    }
+  },
+  {
+    "id": "HIK-2026-002",
+    "data": {
+      "seatNumber": "D-70",
+      "batch": "24/7 Dedicated Access (No Shifts)",
+      "uid": "mem-real-002",
+      "feeDueDate": "2026-11-19",
+      "notes": "Registered member",
+      "fullName": "Sadaf Majeed",
+      "monthlyFee": 1000,
+      "warningCount": 0,
+      "feeStatus": "Paid",
+      "phoneNumber": "7006628964",
+      "feeReminders": [],
+      "avatarUrl": "",
+      "registrationDate": "2026-09-19",
+      "id": "HIK-2026-002",
+      "email": "sadafmajeed555@gmail.com",
+      "joiningDate": "2026-09-19",
+      "studyTarget": "NEET",
+      "membershipStatus": "Active"
+    }
+  },
+  {
+    "id": "HIK-2026-003",
+    "data": {
+      "feeReminders": [],
+      "seatNumber": "D-80",
+      "feeStatus": "Paid",
+      "batch": "24/7 Dedicated Access (No Shifts)",
+      "feeDueDate": "2026-11-08",
+      "uid": "mem-real-003",
+      "notes": "Registered member",
+      "monthlyFee": 1000,
+      "avatarUrl": "",
+      "warningCount": 0,
+      "fullName": "Syed Ahmed",
+      "joiningDate": "2026-09-08",
+      "studyTarget": "UPSC",
+      "phoneNumber": "7780834427",
+      "registrationDate": "2026-09-08",
+      "membershipStatus": "Active",
+      "id": "HIK-2026-003",
+      "email": "syedabsar02@gmail.com"
+    }
+  },
+  {
+    "id": "HIK-2026-004",
+    "data": {
+      "seatNumber": "D-14",
+      "phoneNumber": "7006467029",
+      "notes": "Registered member",
+      "feeStatus": "Paid",
+      "registrationDate": "2026-10-19",
+      "studyTarget": "B.ED",
+      "batch": "24/7 Dedicated Access (No Shifts)",
+      "joiningDate": "2026-10-19",
+      "monthlyFee": 1000,
+      "avatarUrl": "",
+      "membershipStatus": "Active",
+      "feeDueDate": "2026-11-19",
+      "feeReminders": [],
+      "email": "muneercusrinagar@gmail.com",
+      "fullName": "Muneer Maqbool",
+      "id": "HIK-2026-004",
+      "warningCount": 0,
+      "uid": "mem-real-004"
+    }
+  },
+  {
+    "id": "HIK-2026-005",
+    "data": {
+      "batch": "24/7 Dedicated Access (No Shifts)",
+      "seatNumber": "D-09",
+      "phoneNumber": "7006443322",
+      "studyTarget": "NEET",
+      "joiningDate": "2026-08-13",
+      "uid": "mem-real-005",
+      "monthlyFee": 1000,
+      "notes": "Registered member",
+      "feeDueDate": "2026-09-13",
+      "warningCount": 0,
+      "fullName": "syeeeed malikkk",
+      "membershipStatus": "Active",
+      "registrationDate": "2026-08-13",
+      "avatarUrl": "",
+      "feeReminders": [],
+      "email": "syeeeed444@gmail.com",
+      "id": "HIK-2026-005",
+      "feeStatus": "Overdue"
+    }
+  }
+]

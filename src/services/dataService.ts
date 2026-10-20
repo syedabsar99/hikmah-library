@@ -1,5 +1,6 @@
 import type {
   MemberProfile,
+  MemberDirectoryItem,
   AttendanceRecord,
   WarningRecord,
   Announcement,
@@ -14,6 +15,7 @@ import { db, isFirebaseConfigured } from './firebase.ts';
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   updateDoc,
@@ -38,6 +40,7 @@ const KEYS = {
   RULES: 'hikmah_rules_v2',
   CAROUSEL_PHOTOS: 'hikmah_carousel_photos_v2',
   MEMBER_AVATARS: 'hikmah_member_avatars_v1',
+  MEMBER_DIRECTORY: 'hikmah_member_directory_v1',
 };
 
 // Seed Data
@@ -627,9 +630,6 @@ export const DataService = {
         // Exclude dummy test accounts ending with @example.com
         cloudList = cloudList.filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
 
-        const localList = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS)
-          .filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
-
         const mergedMap = new Map<string, MemberProfile>();
 
         // 1. Authoritative Cloud members from Firestore
@@ -642,18 +642,7 @@ export const DataService = {
           }
         });
 
-        // 2. If this local device has any real member not yet in Firestore, merge & push it
-        const activeDb = db;
-        localList.forEach((m) => {
-          const id = (m.id || '').toLowerCase().trim();
-          if (id && !mergedMap.has(id)) {
-            mergedMap.set(id, m);
-            if (this.isLiveFirebase() && activeDb && m.id) {
-              setDoc(doc(activeDb, 'member_profiles', m.id), m, { merge: true }).catch(console.warn);
-            }
-          }
-        });
-
+        // Authoritative cloud members from Firestore
         const mergedArray = Array.from(mergedMap.values());
         saveLocal(KEYS.MEMBERS, mergedArray);
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -670,30 +659,30 @@ export const DataService = {
   },
 
   async pushMembersToCloud(members: MemberProfile[]): Promise<void> {
-    // 1. Primary Cloud Target: Google Cloud Firestore (Immediate, 100% Free, 50,000 writes/day)
+    // Primary Cloud Target: Google Cloud Firestore (Immediate, 100% Free, 50,000 writes/day)
     if (this.isLiveFirebase() && db) {
       try {
         const cleanMembers = members.filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
         for (const m of cleanMembers) {
           if (m.id) {
             await setDoc(doc(db, 'member_profiles', m.id), m, { merge: true });
+            const dirDoc: MemberDirectoryItem = {
+              id: m.id,
+              uid: m.uid || '',
+              fullName: m.fullName,
+              seatNumber: m.seatNumber || 'Unassigned',
+              batch: m.batch || '24/7 Dedicated Access',
+              studyTarget: m.studyTarget || 'General',
+              membershipStatus: m.membershipStatus || 'Active',
+              avatarUrl: m.avatarUrl || '',
+            };
+            await setDoc(doc(db, 'member_directory', m.id), dirDoc, { merge: true });
           }
         }
       } catch (fbErr) {
         console.warn('Firestore push notice:', fbErr);
       }
     }
-
-    // 2. Secondary backup
-    try {
-      if (typeof window === 'undefined' || !window.location || typeof fetch === 'undefined') return;
-      const deletedIds = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
-      await fetch('/api/members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_all', members, deletedIds }),
-      });
-    } catch {}
   },
 
   // ---------------- MEMBERSHIP OPERATIONS ----------------
@@ -739,19 +728,6 @@ export const DataService = {
         }
       });
 
-      // Preserve any unpushed locally registered members and sync to Firestore
-      const activeDb = db;
-      localMembers.forEach((m) => {
-        const key = (m.id || m.email || '').toLowerCase().trim();
-        const id = (m.id || '').toLowerCase().trim();
-        if (key && !memberMap.has(key) && !deletedSet.has(id)) {
-          memberMap.set(key, m);
-          if (this.isLiveFirebase() && activeDb && m.id) {
-            setDoc(doc(activeDb, 'member_profiles', m.id), m, { merge: true }).catch(console.warn);
-          }
-        }
-      });
-
       list = Array.from(memberMap.values());
       saveLocal(KEYS.MEMBERS, list);
     } else {
@@ -794,8 +770,56 @@ export const DataService = {
   },
 
   async getMemberById(id: string): Promise<MemberProfile | null> {
-    const members = await this.getMembers();
+    if (!id) return null;
+    if (this.isLiveFirebase() && db) {
+      try {
+        const snap = await getDoc(doc(db, 'member_profiles', id));
+        if (snap && snap.exists()) {
+          return snap.data() as MemberProfile;
+        }
+      } catch (err) {
+        console.warn('Firebase getMemberById error:', err);
+      }
+    }
+    const members = this.getLocalMembersSync();
     return members.find((m) => m.id === id || m.uid === id) || null;
+  },
+
+  async getMemberDirectory(): Promise<MemberDirectoryItem[]> {
+    let list: MemberDirectoryItem[] = [];
+    if (this.isLiveFirebase() && db) {
+      try {
+        const snap = await getDocs(collection(db, 'member_directory'));
+        if (snap && !snap.empty) {
+          list = snap.docs.map((d) => d.data() as MemberDirectoryItem);
+        }
+      } catch (err) {
+        console.warn('Firebase getMemberDirectory note:', err);
+      }
+    }
+
+    if (list.length > 0) {
+      saveLocal(KEYS.MEMBER_DIRECTORY, list);
+      return list;
+    }
+
+    // Fallback to local cache of directory or derive sanitized directory from local members
+    const localDir = loadLocal<MemberDirectoryItem[]>(KEYS.MEMBER_DIRECTORY, []);
+    if (localDir.length > 0) {
+      return localDir;
+    }
+
+    const localMembers = this.getLocalMembersSync();
+    return localMembers.map((m) => ({
+      id: m.id,
+      uid: m.uid || '',
+      fullName: m.fullName,
+      seatNumber: m.seatNumber || 'Unassigned',
+      batch: m.batch || '24/7 Dedicated Access',
+      studyTarget: m.studyTarget || 'General',
+      membershipStatus: m.membershipStatus || 'Active',
+      avatarUrl: m.avatarUrl || '',
+    }));
   },
 
   checkMemberDuplicate(
@@ -932,6 +956,20 @@ export const DataService = {
         setDoc(doc(db, 'member_profiles', newId), newMember, { merge: true }).catch((err) => {
           console.warn('Firebase addMember sync error:', err);
         });
+        const dirItem: MemberDirectoryItem = {
+          id: newId,
+          uid: newMember.uid,
+          fullName: newMember.fullName,
+          seatNumber: newMember.seatNumber,
+          batch: newMember.batch,
+          studyTarget: newMember.studyTarget,
+          membershipStatus: newMember.membershipStatus,
+          avatarUrl: newMember.avatarUrl || '',
+          updatedAt: new Date().toISOString(),
+        };
+        setDoc(doc(db, 'member_directory', newId), dirItem, { merge: true }).catch((err) => {
+          console.warn('Firebase addMember directory sync error:', err);
+        });
       }
 
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -969,6 +1007,23 @@ export const DataService = {
       } catch (err) {
         console.warn('Firebase updateMember sync error:', err);
       }
+
+      // Sync public directory fields to member_directory
+      const dirUpdates: Partial<MemberDirectoryItem> = {};
+      if (updates.fullName !== undefined) dirUpdates.fullName = updates.fullName;
+      if (updates.seatNumber !== undefined) dirUpdates.seatNumber = updates.seatNumber;
+      if (updates.batch !== undefined) dirUpdates.batch = updates.batch;
+      if (updates.studyTarget !== undefined) dirUpdates.studyTarget = updates.studyTarget;
+      if (updates.membershipStatus !== undefined) dirUpdates.membershipStatus = updates.membershipStatus;
+      if (updates.avatarUrl !== undefined) dirUpdates.avatarUrl = updates.avatarUrl;
+      if (updates.uid !== undefined) dirUpdates.uid = updates.uid;
+
+      if (Object.keys(dirUpdates).length > 0) {
+        dirUpdates.updatedAt = new Date().toISOString();
+        setDoc(doc(db, 'member_directory', id), dirUpdates, { merge: true }).catch((err) => {
+          console.warn('Firebase updateMember directory sync error:', err);
+        });
+      }
     }
 
     await this.addAuditLog(
@@ -1002,6 +1057,14 @@ export const DataService = {
           {
             ...members[index],
             avatarUrl,
+          },
+          { merge: true }
+        );
+        await setDoc(
+          doc(db, 'member_directory', memberId),
+          {
+            avatarUrl,
+            updatedAt: new Date().toISOString(),
           },
           { merge: true }
         );
@@ -1071,18 +1134,14 @@ export const DataService = {
     });
     saveLocal(KEYS.MEMBERS, filtered);
 
-    // 3. Delete from live cloud storage (Vercel Blob) non-blocking in background
-    if (typeof window !== 'undefined' && window.location && typeof fetch !== 'undefined') {
-      fetch('/api/members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'delete',
-          id: targetId,
-        }),
-      }).catch((cloudErr) => {
-        console.warn('Cloud delete error:', cloudErr);
-      });
+    // 3. Remove from live cloud firestore (both member_profiles and member_directory)
+    if (this.isLiveFirebase() && db) {
+      try {
+        await deleteDoc(doc(db, 'member_profiles', targetId));
+        await deleteDoc(doc(db, 'member_directory', targetId));
+      } catch (err) {
+        console.warn('Firebase deleteMember sync error:', err);
+      }
     }
 
     // 4. Immediately purge all chat messages involving this deleted member
@@ -1094,15 +1153,6 @@ export const DataService = {
       saveLocal(KEYS.CHAT_MESSAGES, remainingMessages);
     } catch {
       // Ignore local storage error
-    }
-
-    // 5. Remove from live cloud firestore if configured
-    if (this.isLiveFirebase() && db) {
-      try {
-        await deleteDoc(doc(db, 'member_profiles', targetId));
-      } catch (err) {
-        console.warn('Firebase deleteMember sync error:', err);
-      }
     }
 
     // 6. Log audit event
@@ -1841,11 +1891,20 @@ export const DataService = {
 
   // ---------------- PRIVATE E2E ENCRYPTED MEMBER CHAT ----------------
   // Messages automatically delete after 12 hours to avoid overloading
-  async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
+  async getChatMessages(sessionId: string, viewerUid?: string): Promise<ChatMessage[]> {
     let cloudMsgs: ChatMessage[] = [];
     if (this.isLiveFirebase() && db && sessionId) {
       try {
-        const q = query(collection(db, 'chat_messages'), where('sessionId', '==', sessionId));
+        let q;
+        if (viewerUid) {
+          q = query(
+            collection(db, 'chat_messages'),
+            where('sessionId', '==', sessionId),
+            where('participantUids', 'array-contains', viewerUid)
+          );
+        } else {
+          q = query(collection(db, 'chat_messages'), where('sessionId', '==', sessionId));
+        }
         const snap = await getDocs(q);
         if (snap && !snap.empty) {
           cloudMsgs = snap.docs.map((d) => d.data() as ChatMessage);
@@ -1876,17 +1935,30 @@ export const DataService = {
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   },
 
-  async getUnreadChatCounts(viewerId: string): Promise<{ total: number; bySender: Record<string, number> }> {
+  async getUnreadChatCounts(viewerId: string, viewerUid?: string): Promise<{ total: number; bySender: Record<string, number> }> {
     if (!viewerId) return { total: 0, bySender: {} };
     let cloudMsgs: ChatMessage[] = [];
     if (this.isLiveFirebase() && db) {
       try {
-        const q = query(collection(db, 'chat_messages'), where('recipientId', '==', viewerId));
+        let q;
+        if (viewerUid) {
+          q = query(
+            collection(db, 'chat_messages'),
+            where('participantUids', 'array-contains', viewerUid)
+          );
+        } else {
+          q = query(
+            collection(db, 'chat_messages'),
+            where('recipientId', '==', viewerId)
+          );
+        }
         const snap = await getDocs(q);
         if (snap && !snap.empty) {
           cloudMsgs = snap.docs.map((d) => d.data() as ChatMessage);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Firestore getUnreadChatCounts note:', err);
+      }
     }
 
     const localMsgs = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
@@ -1905,7 +1977,10 @@ export const DataService = {
     });
     saveLocal(KEYS.CHAT_MESSAGES, valid);
 
-    const unread = valid.filter((m) => m.recipientId === viewerId && m.status !== 'seen');
+    const unread = valid.filter((m) => {
+      const isRecipient = m.recipientId === viewerId || (viewerUid && m.recipientUid === viewerUid);
+      return isRecipient && m.status !== 'seen';
+    });
     const bySender: Record<string, number> = {};
     for (const m of unread) {
       bySender[m.senderId] = (bySender[m.senderId] || 0) + 1;
@@ -1916,9 +1991,16 @@ export const DataService = {
     };
   },
 
-  async sendChatMessage(message: Omit<ChatMessage, 'id' | 'timestamp' | 'expiresAt' | 'status'> & { status?: 'sent' | 'delivered' | 'seen' }): Promise<ChatMessage> {
+  async sendChatMessage(message: Omit<ChatMessage, 'id' | 'timestamp' | 'expiresAt' | 'status'> & { status?: 'sent' | 'delivered' | 'seen'; senderUid?: string; recipientUid?: string }): Promise<ChatMessage> {
+    const sUid = message.senderUid || '';
+    const rUid = message.recipientUid || '';
+    const participantUids = [sUid, rUid].filter(Boolean);
+
     const newMessage: ChatMessage = {
       ...message,
+      senderUid: sUid,
+      recipientUid: rUid,
+      participantUids,
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: new Date().toISOString(),
       // Auto-expires in 12 hours
@@ -1932,9 +2014,12 @@ export const DataService = {
 
     // Persist to Google Cloud Firestore immediately for multi-device sync
     if (this.isLiveFirebase() && db) {
-      setDoc(doc(db, 'chat_messages', newMessage.id), newMessage).catch((err) => {
-        console.warn('Firestore sendChatMessage error:', err);
-      });
+      try {
+        await setDoc(doc(db, 'chat_messages', newMessage.id), newMessage);
+      } catch (err: any) {
+        console.error('CRITICAL: Firestore sendChatMessage failed:', err);
+        throw new Error(`Failed to deliver message to cloud: ${err?.message || 'Permission denied'}`);
+      }
     }
 
     if (typeof window !== 'undefined') {
@@ -1945,14 +2030,17 @@ export const DataService = {
     return newMessage;
   },
 
-  async markMessagesSeen(sessionId: string, viewerId: string): Promise<void> {
+  async markMessagesSeen(sessionId: string, viewerId: string, viewerUid?: string): Promise<void> {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     let changed = false;
     const updated = all.map((m) => {
-      if (m.sessionId === sessionId && m.recipientId === viewerId && m.status !== 'seen') {
+      const isRecipient = m.recipientId === viewerId || (viewerUid && m.recipientUid === viewerUid);
+      if (m.sessionId === sessionId && isRecipient && m.status !== 'seen') {
         changed = true;
         if (this.isLiveFirebase() && db) {
-          updateDoc(doc(db, 'chat_messages', m.id), { status: 'seen' }).catch(() => {});
+          updateDoc(doc(db, 'chat_messages', m.id), { status: 'seen' }).catch((err) => {
+            console.warn('Firestore markMessagesSeen status update error:', err);
+          });
         }
         return { ...m, status: 'seen' as const };
       }

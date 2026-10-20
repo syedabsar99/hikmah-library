@@ -7,6 +7,7 @@ import type {
   WarningRecord,
   ChatMessage,
   MemberProfile,
+  MemberDirectoryItem,
 } from '../types';
 import { validatePasswordPolicy } from '../utils/validation';
 import { compressAvatarImage } from '../utils/imageCompressor';
@@ -34,13 +35,14 @@ import {
   EyeOff,
 } from 'lucide-react';
 
+export type ChatPeer = MemberDirectoryItem | Omit<MemberProfile, 'passcode'>;
+
 interface MemberPortalProps {
   onNavigate?: (view: string) => void;
 }
 
 export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavigate }) => {
-  const { currentUser, currentMemberProfile: authMemberProfile, logout, refreshProfile, adminPhone, adminEmail, changeLoggedInMemberPassword } = useAuth();
-  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
+  const { currentUser, currentMemberProfile: authMemberProfile, logout, refreshProfile, changeLoggedInMemberPassword } = useAuth();
 
   // Member live profile state (synced with DataService)
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(authMemberProfile);
@@ -61,30 +63,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
   // Member Datasets
   const [myWarnings, setMyWarnings] = useState<WarningRecord[]>([]);
-  const [availablePeers, setAvailablePeers] = useState<MemberProfile[]>(() =>
-    DataService.getLocalMembersSync().filter((m) => m.id !== currentUser?.memberId && m.membershipStatus === 'Active')
-  );
+  const [availablePeers, setAvailablePeers] = useState<MemberDirectoryItem[]>([]);
 
   // E2E Encrypted Chat State (Dedicated direct encrypted channel with Administration)
-  const adminPeer: MemberProfile = {
+  const adminPeer: ChatPeer = {
     id: 'admin-chief-001',
     uid: 'admin-chief-001',
     fullName: 'Chief Librarian & Administration',
-    email: adminEmail || 'admin@hikmahlibrary.com',
-    phoneNumber: displayPhone,
-    registrationDate: '2025-01-01',
-    joiningDate: '2025-01-01',
     membershipStatus: 'Active',
     batch: '24/7 Administration',
     studyTarget: 'Library Administration & Operations',
-    warningCount: 0,
-    feeDueDate: '2099-12-31',
-    feeStatus: 'Paid',
-    monthlyFee: 0,
   };
 
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [activeChatPeer, setActiveChatPeer] = useState<MemberProfile>(adminPeer);
+  const [activeChatPeer, setActiveChatPeer] = useState<ChatPeer>(adminPeer);
   const [chatMessages, setChatMessages] = useState<Array<ChatMessage & { decryptedText?: string }>>([]);
   const [chatInput, setChatInput] = useState('');
   const [isEncrypting, setIsEncrypting] = useState(false);
@@ -97,24 +89,26 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
   const refreshUnreadCounts = async () => {
     const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    const currentUid = currentUser?.uid;
     if (!currentId) return;
     try {
-      const counts = await DataService.getUnreadChatCounts(currentId);
+      const counts = await DataService.getUnreadChatCounts(currentId, currentUid);
       setUnreadChatCounts(counts);
     } catch (err) {
       console.warn('Error refreshing unread chat counts:', err);
     }
   };
 
-  const loadMessagesForPeer = async (peer: MemberProfile, key: CryptoKey, markSeen = true) => {
+  const loadMessagesForPeer = async (peer: ChatPeer, key: CryptoKey, markSeen = true) => {
     const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+    const currentUid = currentUser?.uid;
     if (!currentId) return;
     try {
       const sessionId = [currentId, peer.id].sort().join('--');
       if (markSeen) {
-        await DataService.markMessagesSeen(sessionId, currentId);
+        await DataService.markMessagesSeen(sessionId, currentId, currentUid);
       }
-      const rawMessages = await DataService.getChatMessages(sessionId);
+      const rawMessages = await DataService.getChatMessages(sessionId, currentUid);
 
       const decrypted = await Promise.all(
         rawMessages.map(async (msg) => {
@@ -157,9 +151,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
       const warns = await DataService.getWarnings(currentUser.memberId);
       setMyWarnings(warns.filter((w) => !w.isCorrected));
 
-      const allMembers = await DataService.getMembers();
+      // Query non-sensitive public member directory instead of full private profiles
+      const directoryMembers = await DataService.getMemberDirectory();
       setAvailablePeers(
-        allMembers.filter((m) => m.id !== currentUser.memberId && m.membershipStatus === 'Active')
+        directoryMembers.filter((m) => m.id !== currentUser.memberId && m.membershipStatus === 'Active')
       );
       await refreshUnreadCounts();
     } finally {
@@ -207,7 +202,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   }, [authMemberProfile]);
 
   // Initialize E2E Chat Session with Administration / Peer
-  const initChatSession = async (peer: MemberProfile) => {
+  const initChatSession = async (peer: ChatPeer) => {
     const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
     if (!currentId) return;
     setActiveChatPeer(peer);
@@ -280,6 +275,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const currentUserId = (currentUser?.memberId || profile?.id || authMemberProfile?.id || '').trim();
+    const currentUid = currentUser?.uid || '';
+    const recipientUid = activeChatPeer.uid || '';
     if (!chatInput.trim() || !activeChatPeer || !sessionKey || !currentUserId) return;
 
     setIsEncrypting(true);
@@ -296,6 +293,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
         senderId: currentUserId,
         senderName: currentUser?.name || profile?.fullName || 'Member',
         recipientId: activeChatPeer.id,
+        senderUid: currentUid,
+        recipientUid: recipientUid,
         ciphertext,
         iv,
         status: 'delivered',
@@ -1398,7 +1397,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                         const count = unreadChatCounts.bySender[peer.id] || 0;
                         return (
                           <option key={peer.id} value={peer.id}>
-                            {count > 0 ? `🔴 (${count} NEW) ` : ''}{peer.fullName} ({peer.phoneNumber || peer.id})
+                            {count > 0 ? `🔴 (${count} NEW) ` : ''}{peer.fullName} ({peer.seatNumber ? `Seat ${peer.seatNumber}` : peer.id})
                           </option>
                         );
                       })}

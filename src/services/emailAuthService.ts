@@ -130,10 +130,10 @@ class RealEmailAuthService {
     if (!norm.isValid) return false;
     try {
       const members = await DataService.getMembers();
-      return members.some((m) => m.email?.toLowerCase() === norm.email);
-    } catch {
-      return false;
-    }
+      if (members.some((m) => m.email?.toLowerCase() === norm.email)) return true;
+    } catch {}
+    // If live Firebase is configured, allow Firebase Auth to validate and handle the password reset safely
+    return isFirebaseConfigured();
   }
 
   /**

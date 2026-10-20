@@ -127,12 +127,27 @@ export interface AuditLog {
   targetId?: string;
 }
 
+export interface MemberDirectoryItem {
+  id: string;
+  uid?: string;
+  fullName: string;
+  seatNumber?: string;
+  batch: string;
+  studyTarget: string;
+  membershipStatus: MembershipStatus;
+  avatarUrl?: string;
+  updatedAt?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sessionId: string;
   senderId: string;
+  senderUid?: string;
   senderName: string;
   recipientId: string;
+  recipientUid?: string;
+  participantUids?: string[];
   ciphertext: string; // AES-GCM encrypted payload base64
   iv: string; // AES-GCM IV base64
   timestamp: string;

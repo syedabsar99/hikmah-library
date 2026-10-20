@@ -434,7 +434,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (auth && isFirebaseConfigured()) {
       try {
         const userCred = await signInWithEmailAndPassword(auth, member.email, passcode.trim());
-        if (userCred.user.uid && member.uid !== userCred.user.uid) {
+        if (userCred.user.uid) {
+          member.uid = userCred.user.uid;
           await DataService.updateMember(member.id, { uid: userCred.user.uid }, 'Sync Firebase Auth UID');
         }
       } catch (err: any) {
@@ -444,6 +445,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (member.passcode && member.passcode === passcode.trim()) {
             try {
               const newCred = await createUserWithEmailAndPassword(auth, member.email, passcode.trim());
+              member.uid = newCred.user.uid;
               await DataService.updateMember(member.id, { uid: newCred.user.uid }, 'Auto-provision Firebase Auth Account');
             } catch (createErr) {
               console.warn('Auto-provisioning member into Firebase Auth warning:', createErr);
@@ -485,7 +487,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const user: CurrentUser = {
-      uid: member.uid || `uid-${member.id}`,
+      uid: auth?.currentUser?.uid || member.uid || `uid-${member.id}`,
       role: 'member',
       memberId: member.id,
       name: member.fullName,

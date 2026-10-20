@@ -11,6 +11,8 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.admin == true ||
+        request.auth.token.email == 'syedabsar99@gmail.com' ||
+        request.auth.token.email == 'admin@hikmahlibrary.com' ||
         exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid))
       );
     }
@@ -22,13 +24,13 @@ service cloud.firestore {
     
     // Admin Roles collection: strictly managed by primary administrator
     match /admin_roles/{adminId} {
-      allow read: if isAdmin();
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
     
-    // Member Profiles collection
+    // Member Profiles collection (FULL PRIVATE PROFILES)
     // Members can ONLY read their own profile; Admin can read and write all member profiles
-    // Prevents self-promotion or tampering with membership status / warning count
+    // Prevents self-promotion or tampering with membership status / warning count / fee records
     match /member_profiles/{memberDocId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
       allow create, delete: if isAdmin();
@@ -38,6 +40,20 @@ service cloud.firestore {
         request.resource.data.role == resource.data.role &&
         request.resource.data.membershipStatus == resource.data.membershipStatus &&
         request.resource.data.warningCount == resource.data.warningCount
+      );
+    }
+
+    // Member Directory collection (SEPARATE PUBLIC/STUDENT DIRECTORY)
+    // Exposes ONLY non-sensitive fields needed for peer identification & lounge chat:
+    // (id, uid, fullName, seatNumber, batch, studyTarget, membershipStatus, avatarUrl)
+    // Strictly NO passcodes, NO emails, NO phone numbers, NO fee records!
+    match /member_directory/{memberDocId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        (resource.data.uid == request.auth.uid || request.resource.data.uid == request.auth.uid) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatarUrl', 'uid'])
       );
     }
     
@@ -86,26 +102,52 @@ service cloud.firestore {
       allow update, delete: if false; // Immutable audit logs
     }
     
-    // PRIVATE MEMBER-TO-MEMBER CHAT (STRICT PRIVACY ENFORCEMENT)
-    // Only the two specific participants can access their messages.
+    // PRIVATE MEMBER-TO-MEMBER & ADMIN CHAT (STRICT PRIVACY ENFORCEMENT)
+    // Authorizes only the verified participants using Firebase Auth UIDs
+    match /chat_messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid in resource.data.participantUids ||
+        request.auth.uid == resource.data.senderUid ||
+        request.auth.uid == resource.data.recipientUid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        (request.auth.uid == request.resource.data.senderUid || isAdmin()) &&
+        (request.auth.uid in request.resource.data.participantUids || isAdmin())
+      );
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == resource.data.recipientUid || isAdmin()) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+      );
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.senderUid ||
+        request.auth.uid == resource.data.recipientUid ||
+        isAdmin()
+      );
+    }
+    
     match /chat_sessions/{sessionId} {
       allow read, write: if isAuthenticated() && (
         request.auth.uid in resource.data.participantUids ||
-        request.auth.uid in request.resource.data.participantUids
+        request.auth.uid in request.resource.data.participantUids ||
+        isAdmin()
       );
     }
     
     match /temporary_chat_messages/{messageId} {
       allow read: if isAuthenticated() && (
         resource.data.senderUid == request.auth.uid ||
-        resource.data.recipientUid == request.auth.uid
+        resource.data.recipientUid == request.auth.uid ||
+        isAdmin()
       );
       allow create: if isAuthenticated() && (
-        request.resource.data.senderUid == request.auth.uid
+        request.resource.data.senderUid == request.auth.uid ||
+        isAdmin()
       );
       allow delete: if isAuthenticated() && (
         resource.data.senderUid == request.auth.uid ||
-        resource.data.recipientUid == request.auth.uid
+        resource.data.recipientUid == request.auth.uid ||
+        isAdmin()
       );
       allow update: if false; // Messages cannot be altered
     }
@@ -116,4 +158,3 @@ service cloud.firestore {
     }
   }
 }
-
