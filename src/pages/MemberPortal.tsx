@@ -75,6 +75,33 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     studyTarget: 'Library Administration & Operations',
   };
 
+  // Helper to resolve any peer ID (including unread senders not in active directory) to a valid ChatPeer
+  const resolveChatPeer = (peerId: string): ChatPeer => {
+    if (peerId === adminPeer.id) return adminPeer;
+    const fromAvailable = availablePeers.find((p) => p.id === peerId);
+    if (fromAvailable) return fromAvailable;
+    const fromLocal = DataService.getLocalMembersSync().find((m) => m.id === peerId);
+    if (fromLocal) {
+      return {
+        id: fromLocal.id,
+        uid: fromLocal.uid,
+        fullName: fromLocal.fullName,
+        seatNumber: fromLocal.seatNumber,
+        batch: fromLocal.batch,
+        studyTarget: fromLocal.studyTarget,
+        membershipStatus: fromLocal.membershipStatus,
+        avatarUrl: fromLocal.avatarUrl,
+      };
+    }
+    return {
+      id: peerId,
+      fullName: `Member (${peerId})`,
+      membershipStatus: 'Active',
+      batch: 'Library Member',
+      studyTarget: 'Study Lounge',
+    };
+  };
+
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [activeChatPeer, setActiveChatPeer] = useState<ChatPeer>(adminPeer);
   const [chatMessages, setChatMessages] = useState<Array<ChatMessage & { decryptedText?: string }>>([]);
@@ -1121,17 +1148,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {Object.entries(unreadChatCounts.bySender).map(([senderId, count]) => {
-                      const peer = availablePeers.find((p) => p.id === senderId) || (senderId === adminPeer.id ? adminPeer : null);
-                      const name = peer ? peer.fullName : `Member (${senderId})`;
+                      const peer = resolveChatPeer(senderId);
                       return (
                         <button
                           key={senderId}
                           type="button"
                           onClick={() => {
-                            if (peer) {
-                              setIsChatOpen(true);
-                              initChatSession(peer);
-                            }
+                            setIsChatOpen(true);
+                            initChatSession(peer);
+                            setTimeout(() => {
+                              document.getElementById('dedicated-chat-page')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 50);
                           }}
                           style={{
                             background: '#FFFFFF',
@@ -1148,7 +1175,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                             boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                           }}
                         >
-                          <span>Open Chat with {name}</span>
+                          <span>Open Chat with {peer.fullName}</span>
                           <span
                             style={{
                               background: '#DC2626',
@@ -1221,13 +1248,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                     setIsChatOpen(true);
                     const unreadSenderId = Object.keys(unreadChatCounts.bySender)[0];
                     if (unreadSenderId) {
-                      const peer = availablePeers.find((p) => p.id === unreadSenderId) || (unreadSenderId === adminPeer.id ? adminPeer : null);
-                      if (peer) {
-                        initChatSession(peer);
-                        return;
-                      }
+                      const peer = resolveChatPeer(unreadSenderId);
+                      initChatSession(peer);
+                    } else {
+                      initChatSession(activeChatPeer || adminPeer);
                     }
-                    initChatSession(activeChatPeer || adminPeer);
+                    setTimeout(() => {
+                      document.getElementById('dedicated-chat-page')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 50);
                   }}
                   className="btn-gold"
                   style={{
@@ -1374,12 +1402,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                       value={activeChatPeer.id}
                       onChange={(e) => {
                         const selectedId = e.target.value;
-                        if (selectedId === adminPeer.id) {
-                          initChatSession(adminPeer);
-                        } else {
-                          const peer = availablePeers.find((p) => p.id === selectedId);
-                          if (peer) initChatSession(peer);
-                        }
+                        const peer = resolveChatPeer(selectedId);
+                        initChatSession(peer);
                       }}
                       className="form-select"
                       style={{
@@ -1393,6 +1417,22 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                       <option value={adminPeer.id}>
                         {(unreadChatCounts.bySender[adminPeer.id] || 0) > 0 ? `🔴 (${unreadChatCounts.bySender[adminPeer.id]} NEW) ` : ''}Chief Librarian &amp; Administration
                       </option>
+                      {activeChatPeer.id !== adminPeer.id && !availablePeers.some((p) => p.id === activeChatPeer.id) && (
+                        <option value={activeChatPeer.id}>
+                          {(unreadChatCounts.bySender[activeChatPeer.id] || 0) > 0 ? `🔴 (${unreadChatCounts.bySender[activeChatPeer.id]} NEW) ` : ''}{activeChatPeer.fullName}
+                        </option>
+                      )}
+                      {Object.keys(unreadChatCounts.bySender)
+                        .filter((id) => id !== adminPeer.id && id !== activeChatPeer.id && !availablePeers.some((p) => p.id === id))
+                        .map((id) => {
+                          const peer = resolveChatPeer(id);
+                          const count = unreadChatCounts.bySender[id] || 0;
+                          return (
+                            <option key={id} value={id}>
+                              🔴 ({count} NEW) {peer.fullName}
+                            </option>
+                          );
+                        })}
                       {availablePeers.map((peer) => {
                         const count = unreadChatCounts.bySender[peer.id] || 0;
                         return (
@@ -1483,6 +1523,66 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                       </span>
                     )}
                   </button>
+
+                  {/* Any unlisted active peer or unread senders */}
+                  {Array.from(new Set([
+                    ...Object.keys(unreadChatCounts.bySender),
+                    ...(activeChatPeer.id !== adminPeer.id ? [activeChatPeer.id] : [])
+                  ]))
+                    .filter((id) => id !== adminPeer.id && !availablePeers.some((p) => p.id === id))
+                    .map((peerId) => {
+                      const peer = resolveChatPeer(peerId);
+                      const unread = unreadChatCounts.bySender[peer.id] || 0;
+                      const isActive = activeChatPeer.id === peer.id;
+                      return (
+                        <button
+                          key={peer.id}
+                          type="button"
+                          onClick={() => initChatSession(peer)}
+                          style={{
+                            background: isActive
+                              ? 'rgba(217, 119, 6, 0.25)'
+                              : unread > 0
+                              ? 'rgba(239, 68, 68, 0.18)'
+                              : 'rgba(255, 255, 255, 0.05)',
+                            border: isActive
+                              ? '1px solid var(--accent-gold)'
+                              : unread > 0
+                              ? '1px solid rgba(239, 68, 68, 0.6)'
+                              : '1px solid rgba(255, 255, 255, 0.12)',
+                            color: isActive ? '#FBBF24' : unread > 0 ? '#FCA5A5' : '#E2E8F0',
+                            padding: '5px 12px',
+                            borderRadius: '16px',
+                            fontSize: '0.78rem',
+                            fontWeight: unread > 0 || isActive ? '700' : '500',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s ease',
+                            boxShadow: unread > 0 ? '0 0 10px rgba(239, 68, 68, 0.3)' : 'none',
+                          }}
+                        >
+                          <span>{peer.fullName}</span>
+                          {unread > 0 && (
+                            <span
+                              className="badge-peer-unread"
+                              style={{
+                                background: '#EF4444',
+                                color: '#FFFFFF',
+                                borderRadius: '10px',
+                                padding: '1px 7px',
+                                fontSize: '0.72rem',
+                                fontWeight: '900',
+                              }}
+                            >
+                              {unread}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
 
                   {/* Enrolled Members Chips */}
                   {availablePeers.map((peer) => {
