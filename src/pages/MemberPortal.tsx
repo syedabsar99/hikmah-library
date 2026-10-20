@@ -133,7 +133,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     try {
       const sessionId = [currentId, peer.id].sort().join('--');
       if (markSeen) {
-        await DataService.markMessagesSeen(sessionId, currentId, currentUid);
+        await DataService.markMessagesSeen(sessionId, currentId, currentUid, peer.id);
       }
       const rawMessages = await DataService.getChatMessages(sessionId, currentUid);
 
@@ -242,8 +242,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
       // 2. Clear unread count for this peer in state immediately
       setUnreadChatCounts((prev) => {
         const updatedBySender = { ...prev.bySender };
-        const cleared = updatedBySender[peer.id] || 0;
-        delete updatedBySender[peer.id];
+        let cleared = 0;
+        for (const k of Object.keys(updatedBySender)) {
+          if (k.toLowerCase() === peer.id.toLowerCase()) {
+            cleared += updatedBySender[k];
+            delete updatedBySender[k];
+          }
+        }
         return {
           total: Math.max(0, prev.total - cleared),
           bySender: updatedBySender,
@@ -255,6 +260,19 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
     } catch (err) {
       console.error('Failed to establish E2E encrypted session', err);
     }
+  };
+
+  const openPeerChat = (peerToOpen: ChatPeer) => {
+    setIsChatOpen(true);
+    initChatSession(peerToOpen);
+    requestAnimationFrame(() => {
+      const el = document.getElementById('dedicated-chat-page') || document.getElementById('section-chat');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    setTimeout(() => {
+      const el = document.getElementById('dedicated-chat-page') || document.getElementById('section-chat');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
   };
 
   useEffect(() => {
@@ -1153,13 +1171,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                         <button
                           key={senderId}
                           type="button"
-                          onClick={() => {
-                            setIsChatOpen(true);
-                            initChatSession(peer);
-                            setTimeout(() => {
-                              document.getElementById('dedicated-chat-page')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }, 50);
-                          }}
+                          id={`btn-open-unread-${senderId}`}
+                          onClick={() => openPeerChat(peer)}
                           style={{
                             background: '#FFFFFF',
                             color: '#991B1B',
@@ -1195,6 +1208,36 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                         </button>
                       );
                     })}
+
+                    <button
+                      type="button"
+                      id="btn-dismiss-unread-chat"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const currentId = currentUser?.memberId || profile?.id || authMemberProfile?.id;
+                        if (currentId) {
+                          await DataService.markAllMessagesRead(currentId, currentUser?.uid);
+                          setUnreadChatCounts({ total: 0, bySender: {} });
+                        }
+                      }}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.15)',
+                        border: '1px solid rgba(255, 255, 255, 0.4)',
+                        color: '#FFFFFF',
+                        padding: '6px 12px',
+                        borderRadius: '14px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backdropFilter: 'blur(4px)',
+                      }}
+                      title="Clear all unread notification badges"
+                    >
+                      ✓ Mark all read
+                    </button>
                   </div>
                 </div>
               )}
@@ -1245,17 +1288,11 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({ onNavigate: _onNavig
                   type="button"
                   id="btn-start-private-chat"
                   onClick={() => {
-                    setIsChatOpen(true);
                     const unreadSenderId = Object.keys(unreadChatCounts.bySender)[0];
-                    if (unreadSenderId) {
-                      const peer = resolveChatPeer(unreadSenderId);
-                      initChatSession(peer);
-                    } else {
-                      initChatSession(activeChatPeer || adminPeer);
-                    }
-                    setTimeout(() => {
-                      document.getElementById('dedicated-chat-page')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 50);
+                    const targetPeer = unreadSenderId
+                      ? resolveChatPeer(unreadSenderId)
+                      : (activeChatPeer || adminPeer);
+                    openPeerChat(targetPeer);
                   }}
                   className="btn-gold"
                   style={{

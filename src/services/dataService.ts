@@ -1930,8 +1930,24 @@ export const DataService = {
       return isFresh && !isLegacyDummy;
     });
     saveLocal(KEYS.CHAT_MESSAGES, valid);
+    const normSessionId = (sessionId || '').toLowerCase();
+    const parts = normSessionId.split('--');
+    const p1 = parts[0];
+    const p2 = parts[1];
+
     return valid
-      .filter((m) => m.sessionId === sessionId)
+      .filter((m) => {
+        const mSess = (m.sessionId || '').toLowerCase();
+        if (mSess === normSessionId) return true;
+        if (p1 && p2) {
+          const sId = (m.senderId || '').toLowerCase();
+          const rId = (m.recipientId || '').toLowerCase();
+          if ((sId === p1 && rId === p2) || (sId === p2 && rId === p1)) {
+            return true;
+          }
+        }
+        return false;
+      })
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   },
 
@@ -1977,8 +1993,9 @@ export const DataService = {
     });
     saveLocal(KEYS.CHAT_MESSAGES, valid);
 
+    const normViewerId = viewerId.toLowerCase();
     const unread = valid.filter((m) => {
-      const isRecipient = m.recipientId === viewerId || (viewerUid && m.recipientUid === viewerUid);
+      const isRecipient = (m.recipientId || '').toLowerCase() === normViewerId || (viewerUid && m.recipientUid === viewerUid);
       return isRecipient && m.status !== 'seen';
     });
     const bySender: Record<string, number> = {};
@@ -2030,12 +2047,27 @@ export const DataService = {
     return newMessage;
   },
 
-  async markMessagesSeen(sessionId: string, viewerId: string, viewerUid?: string): Promise<void> {
+  async markMessagesSeen(sessionId: string, viewerId: string, viewerUid?: string, peerId?: string): Promise<void> {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     let changed = false;
+    const normSessionId = (sessionId || '').toLowerCase();
+    const normViewerId = (viewerId || '').toLowerCase();
+    const normPeerId = (peerId || '').toLowerCase();
+    const parts = normSessionId.split('--');
+    const p1 = parts[0];
+    const p2 = parts[1];
+
     const updated = all.map((m) => {
-      const isRecipient = m.recipientId === viewerId || (viewerUid && m.recipientUid === viewerUid);
-      if (m.sessionId === sessionId && isRecipient && m.status !== 'seen') {
+      const sId = (m.senderId || '').toLowerCase();
+      const rId = (m.recipientId || '').toLowerCase();
+      const mSess = (m.sessionId || '').toLowerCase();
+
+      const isRecipient = rId === normViewerId || (viewerUid && m.recipientUid === viewerUid);
+      const isForThisSession = mSess === normSessionId ||
+        (p1 && p2 && ((sId === p1 && rId === p2) || (sId === p2 && rId === p1))) ||
+        (normPeerId && sId === normPeerId && isRecipient);
+
+      if (isForThisSession && isRecipient && m.status !== 'seen') {
         changed = true;
         if (this.isLiveFirebase() && db) {
           updateDoc(doc(db, 'chat_messages', m.id), { status: 'seen' }).catch((err) => {
@@ -2051,6 +2083,31 @@ export const DataService = {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
           detail: { sessionId, viewerId, action: 'seen' }
+        }));
+      }
+    }
+  },
+
+  async markAllMessagesRead(viewerId: string, viewerUid?: string): Promise<void> {
+    const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
+    const normViewerId = (viewerId || '').toLowerCase();
+    let changed = false;
+    const updated = all.map((m) => {
+      const isRecipient = (m.recipientId || '').toLowerCase() === normViewerId || (viewerUid && m.recipientUid === viewerUid);
+      if (isRecipient && m.status !== 'seen') {
+        changed = true;
+        if (this.isLiveFirebase() && db) {
+          updateDoc(doc(db, 'chat_messages', m.id), { status: 'seen' }).catch(() => {});
+        }
+        return { ...m, status: 'seen' as const };
+      }
+      return m;
+    });
+    if (changed) {
+      saveLocal(KEYS.CHAT_MESSAGES, updated);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
+          detail: { viewerId, action: 'seen_all' }
         }));
       }
     }
