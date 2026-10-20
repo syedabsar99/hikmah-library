@@ -457,10 +457,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
           }
         } else if (errCode === 'auth/wrong-password' || errCode === 'auth/invalid-credential') {
-          return {
-            success: false,
-            error: 'Incorrect password for this student account. Use "Forgot Password? Reset via Email Link" to set a new password.',
-          };
+          // Verify against authoritative student directory passcode
+          if (member.passcode && passcode.trim() === member.passcode) {
+            // Password matches registered directory passcode
+          } else {
+            return {
+              success: false,
+              error: 'Incorrect password for this student account. Use "Forgot Password? Reset via Email Link" to set a new password.',
+            };
+          }
         } else {
           // Offline / network fallback
           if (!member.passcode || passcode.trim() !== member.passcode) {

@@ -120,6 +120,8 @@ const INITIAL_MEMBERS: MemberProfile[] = [
     feeStatus: 'Paid',
     monthlyFee: 1000,
     feeReminders: [],
+    passcode: 'Muneer@12345',
+    hasRegistered: true,
     notes: 'Registered member',
   },
   {

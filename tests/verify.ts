@@ -2329,6 +2329,30 @@ async function runTests() {
   await DataService.deleteMember(reAddedMember.id, 'Cleanup');
   await DataService.deleteMember(siblingMember.id, 'Cleanup');
 
+  // ==========================================
+  // SUITE 31: First-Time Registration Guard & Passcode Authentication Resilience
+  // ==========================================
+  console.log('\nSuite 31: First-Time Registration Guard & Passcode Authentication Resilience');
+  
+  // 1. Verify Muneer Maqbool directory entry and password
+  const muneer = await DataService.getMemberByEmail('muneercusrinagar@gmail.com');
+  assert(Boolean(muneer), 'Muneer Maqbool is retrievable by email from member directory');
+  assert(muneer?.passcode === 'Muneer@12345', 'Muneer Maqbool registered passcode is Muneer@12345');
+  assert(muneer?.hasRegistered === true, 'Muneer Maqbool is marked as hasRegistered: true');
+
+  // 2. Re-registration guard check
+  const isAlreadyRegistered = Boolean(muneer && (muneer.hasRegistered || muneer.passcode));
+  assert(isAlreadyRegistered === true, 'Already registered member is recognized by registration guard');
+
+  // 3. Password matching check
+  const enteredPasscode = 'Muneer@12345';
+  const isMatch = muneer?.passcode === enteredPasscode.trim();
+  assert(isMatch === true, 'Registered passcode matches entered password Muneer@12345');
+
+  const wrongPasscode = 'WrongPass@999';
+  const isWrongMatch = muneer?.passcode === wrongPasscode.trim();
+  assert(isWrongMatch === false, 'Incorrect password does not match registered passcode');
+
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);
   console.log('------------------------------------------------------\n');

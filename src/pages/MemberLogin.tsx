@@ -164,7 +164,17 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
         return;
       }
 
-      // 2. Commit new password to Firebase Auth if configured, and to member profile
+      // 2. Prevent re-registration: registration is allowed ONLY for first time!
+      if (member.hasRegistered || Boolean(member.passcode)) {
+        setRegError(
+          `Member "${member.fullName}" is already registered. Please continue with sign in.`
+        );
+        setEmail(cleanEmail);
+        setRegLoading(false);
+        return;
+      }
+
+      // 3. Commit new password to Firebase Auth if configured, and to member profile
       const auth = getFirebaseAuth();
       let userUid = member.uid;
       if (auth && isFirebaseConfigured()) {
@@ -517,7 +527,15 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
               <button
                 type="button"
                 id="member-register-now-btn"
-                onClick={() => {
+                onClick={async () => {
+                  const clean = email.trim().toLowerCase();
+                  if (clean) {
+                    const existing = await DataService.getMemberByEmail(clean);
+                    if (existing && (existing.hasRegistered || Boolean(existing.passcode))) {
+                      setError(`Member "${existing.fullName}" is already registered. Please continue with sign in.`);
+                      return;
+                    }
+                  }
                   setMode('register');
                   setError(null);
                   setSuccessMessage(null);
@@ -584,13 +602,39 @@ export const MemberLogin: React.FC<MemberLoginProps> = ({ onNavigate, onSuccess 
                   fontSize: '0.85rem',
                   marginBottom: '20px',
                   display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
+                  flexDirection: 'column',
+                  gap: '8px',
                   lineHeight: '1.5',
                 }}
               >
-                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#EF4444' }} />
-                <div>{regError}</div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#EF4444' }} />
+                  <div>{regError}</div>
+                </div>
+                {regError.includes('already registered') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('login');
+                      setRegError(null);
+                      setError(null);
+                    }}
+                    style={{
+                      alignSelf: 'flex-start',
+                      marginTop: '4px',
+                      background: 'rgba(217, 119, 6, 0.2)',
+                      border: '1px solid var(--accent-gold)',
+                      color: '#FDE68A',
+                      padding: '6px 14px',
+                      borderRadius: '8px',
+                      fontSize: '0.82rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Continue with Sign In →
+                  </button>
+                )}
               </div>
             )}
 
