@@ -239,25 +239,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await signInWithEmailAndPassword(auth, storedEmail, password);
       } catch (err: any) {
         const errCode = err?.code || '';
-        if (errCode === 'auth/user-not-found') {
-          // If admin has not yet been registered in Firebase Auth, but matches stored credentials,
-          // auto-provision them into Firebase Auth so future resets and logins use Firebase Auth seamlessly
-          if (password === storedCreds.password) {
+        // Note: Firebase Email Enumeration Protection returns 'auth/invalid-credential' instead of 'auth/user-not-found'
+        if (password === storedCreds.password) {
+          // Valid master admin password provided!
+          if (errCode === 'auth/user-not-found' || errCode === 'auth/invalid-credential') {
             try {
               await createUserWithEmailAndPassword(auth, storedEmail, password);
             } catch (createErr) {
-              console.warn('Auto-provisioning admin into Firebase Auth warning:', createErr);
+              console.warn('Auto-provisioning admin into Firebase Auth note:', createErr);
             }
-          } else {
-            return { success: false, error: 'Incorrect administrator password.' };
           }
-        } else if (errCode === 'auth/wrong-password' || errCode === 'auth/invalid-credential') {
-          return { success: false, error: 'Incorrect administrator password.' };
         } else {
-          // Network issue: fallback check against stored creds
-          if (password !== storedCreds.password) {
-            return { success: false, error: 'Incorrect administrator password.' };
-          }
+          return { success: false, error: 'Incorrect administrator password.' };
         }
       }
     } else {
