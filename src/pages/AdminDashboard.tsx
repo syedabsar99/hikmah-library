@@ -43,6 +43,7 @@ import {
   Camera,
   Copy,
   Check,
+  Loader2,
 } from 'lucide-react';
 
 // Process uploaded image file into web-optimized Base64 Data URL (stored permanently in website)
@@ -177,6 +178,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     joiningDate: new Date().toISOString().split('T')[0],
     monthlyFee: '1200',
   });
+
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [isSavingMemberEdit, setIsSavingMemberEdit] = useState(false);
+  const [memberDuplicateError, setMemberDuplicateError] = useState<{
+    title: string;
+    message: string;
+    details?: string;
+    field?: 'email' | 'phone';
+  } | null>(null);
 
   const [markingFeePaidId, setMarkingFeePaidId] = useState<string | null>(null);
 
@@ -590,6 +600,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   // ---------------- ACTION HANDLERS ----------------
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAddingMember) return;
+
     const fullName = newMemberData.fullName.trim();
     const email = newMemberData.email.trim().toLowerCase();
     const phone = newMemberData.phoneNumber.trim();
@@ -604,41 +616,88 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       return;
     }
 
-    const joiningDate = newMemberData.joiningDate || new Date().toISOString().split('T')[0];
-
-    await DataService.addMember(
-      {
-        uid: '',
-        fullName,
-        email,
-        phoneNumber: phone,
-        batch: newMemberData.batch,
-        studyTarget: newMemberData.studyTarget.trim() || 'General Competitive Studies',
-        seatNumber: newMemberData.seatNumber.trim() || 'Assigned Study Cabin',
-        membershipStatus: 'Active',
-        registrationDate: new Date().toISOString().split('T')[0],
-        joiningDate,
-        warningCount: 0,
-        monthlyFee: Number(newMemberData.monthlyFee) || 1200,
-        feeDueDate: '',
-        feeStatus: 'Paid',
-      },
-      'Chief Librarian'
+    // Duplicate Check 1: Email Address (Strict Case-Insensitive)
+    const existingByEmail = members.find(
+      (m) => (m.email || '').toLowerCase().trim() === email
     );
+    if (existingByEmail) {
+      setMemberDuplicateError({
+        title: 'Member Email Already Exists',
+        message: `A member with email address "${email}" is already registered in the library directory.`,
+        details: `Registered Member: ${existingByEmail.fullName} (Member ID: ${existingByEmail.id}, Email: ${existingByEmail.email}). Duplicate email addresses are not permitted because members use this email to log into the Student Portal.`,
+        field: 'email',
+      });
+      return;
+    }
 
-    setShowAddMemberModal(false);
-    setNewMemberData({
-      fullName: '',
-      email: '',
-      phoneNumber: '',
-      batch: '24/7 Dedicated Access (No Shifts)',
-      studyTarget: 'UPSC Civil Services Examination',
-      seatNumber: '',
-      joiningDate: new Date().toISOString().split('T')[0],
-      monthlyFee: '1200',
-    });
-    await loadData();
-    alert(`Member ${fullName} registered successfully! They can log in to the student portal using email: ${email}`);
+    // Duplicate Check 2: Mobile Number (Match last 10 digits)
+    const cleanNewPhone = phone.replace(/\D/g, '').slice(-10);
+    if (cleanNewPhone.length === 10) {
+      const existingByPhone = members.find((m) => {
+        const p = (m.phoneNumber || '').replace(/\D/g, '').slice(-10);
+        return p === cleanNewPhone;
+      });
+      if (existingByPhone) {
+        setMemberDuplicateError({
+          title: 'Member Phone Number Already Exists',
+          message: `A member with mobile number "${phone}" is already registered in the library directory.`,
+          details: `Registered Member: ${existingByPhone.fullName} (Member ID: ${existingByPhone.id}, Phone: ${existingByPhone.phoneNumber}). Duplicate phone numbers are not permitted.`,
+          field: 'phone',
+        });
+        return;
+      }
+    }
+
+    setIsAddingMember(true);
+    try {
+      const joiningDate = newMemberData.joiningDate || new Date().toISOString().split('T')[0];
+
+      await DataService.addMember(
+        {
+          uid: '',
+          fullName,
+          email,
+          phoneNumber: phone,
+          batch: newMemberData.batch,
+          studyTarget: newMemberData.studyTarget.trim() || 'General Competitive Studies',
+          seatNumber: newMemberData.seatNumber.trim() || 'Assigned Study Cabin',
+          membershipStatus: 'Active',
+          registrationDate: new Date().toISOString().split('T')[0],
+          joiningDate,
+          warningCount: 0,
+          monthlyFee: Number(newMemberData.monthlyFee) || 1200,
+          feeDueDate: '',
+          feeStatus: 'Paid',
+        },
+        'Chief Librarian'
+      );
+
+      setShowAddMemberModal(false);
+      setNewMemberData({
+        fullName: '',
+        email: '',
+        phoneNumber: '',
+        batch: '24/7 Dedicated Access (No Shifts)',
+        studyTarget: 'UPSC Civil Services Examination',
+        seatNumber: '',
+        joiningDate: new Date().toISOString().split('T')[0],
+        monthlyFee: '1200',
+      });
+      await loadData();
+      alert(`Member ${fullName} registered successfully! They can log in to the student portal using email: ${email}`);
+    } catch (err: any) {
+      console.error('Error adding member:', err);
+      if (err?.message?.includes('already exists') || err?.message?.includes('Duplicate')) {
+        setMemberDuplicateError({
+          title: 'Duplicate Member Detected',
+          message: err.message,
+        });
+      } else {
+        alert(err?.message || 'Failed to register member. Please check details and try again.');
+      }
+    } finally {
+      setIsAddingMember(false);
+    }
   };
 
   const handleOpenEditMember = (m: MemberProfile) => {
@@ -659,36 +718,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
   const handleSaveMemberEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetMemberForEdit) return;
+    if (!targetMemberForEdit || isSavingMemberEdit) return;
 
     const email = editMemberForm.email.trim().toLowerCase();
+    const phone = editMemberForm.phoneNumber.trim();
+
     if (!email || !email.includes('@')) {
       alert('A valid student email address is required.');
       return;
     }
 
-    const feeDueDate = editMemberForm.feeDueDate || targetMemberForEdit.feeDueDate || new Date().toISOString().split('T')[0];
-    const { status: calculatedFeeStatus } = calculateFeeStatus(feeDueDate);
-
-    await DataService.updateMember(
-      targetMemberForEdit.id,
-      {
-        fullName: editMemberForm.fullName.trim(),
-        email,
-        phoneNumber: editMemberForm.phoneNumber.trim(),
-        seatNumber: editMemberForm.seatNumber.trim() || 'Assigned Focus Desk',
-        studyTarget: editMemberForm.studyTarget.trim() || 'Competitive Exam Target',
-        joiningDate: editMemberForm.joiningDate || targetMemberForEdit.joiningDate,
-        feeDueDate,
-        feeStatus: calculatedFeeStatus,
-        monthlyFee: Number(editMemberForm.monthlyFee) || 1200,
-        membershipStatus: editMemberForm.membershipStatus,
-      },
-      'Chief Librarian'
+    // Check duplicate email against other members
+    const otherMemberByEmail = members.find(
+      (m) => m.id !== targetMemberForEdit.id && (m.email || '').toLowerCase().trim() === email
     );
-    await loadData();
-    setShowEditMemberModal(false);
-    alert('Student profile, allotted desk, fee schedule, and expiry date updated successfully!');
+    if (otherMemberByEmail) {
+      setMemberDuplicateError({
+        title: 'Member Email Already Exists',
+        message: `Another member with email "${email}" is already registered in the library.`,
+        details: `Existing Member: ${otherMemberByEmail.fullName} (ID: ${otherMemberByEmail.id}).`,
+        field: 'email',
+      });
+      return;
+    }
+
+    // Check duplicate phone against other members
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length === 10) {
+      const otherMemberByPhone = members.find((m) => {
+        if (m.id === targetMemberForEdit.id) return false;
+        const p = (m.phoneNumber || '').replace(/\D/g, '').slice(-10);
+        return p === cleanPhone;
+      });
+      if (otherMemberByPhone) {
+        setMemberDuplicateError({
+          title: 'Member Phone Number Already Exists',
+          message: `Another member with phone number "${phone}" is already registered in the library.`,
+          details: `Existing Member: ${otherMemberByPhone.fullName} (ID: ${otherMemberByPhone.id}).`,
+          field: 'phone',
+        });
+        return;
+      }
+    }
+
+    setIsSavingMemberEdit(true);
+    try {
+      const feeDueDate = editMemberForm.feeDueDate || targetMemberForEdit.feeDueDate || new Date().toISOString().split('T')[0];
+      const { status: calculatedFeeStatus } = calculateFeeStatus(feeDueDate);
+
+      await DataService.updateMember(
+        targetMemberForEdit.id,
+        {
+          fullName: editMemberForm.fullName.trim(),
+          email,
+          phoneNumber: phone,
+          seatNumber: editMemberForm.seatNumber.trim() || 'Assigned Focus Desk',
+          studyTarget: editMemberForm.studyTarget.trim() || 'Competitive Exam Target',
+          joiningDate: editMemberForm.joiningDate || targetMemberForEdit.joiningDate,
+          feeDueDate,
+          feeStatus: calculatedFeeStatus,
+          monthlyFee: Number(editMemberForm.monthlyFee) || 1200,
+          membershipStatus: editMemberForm.membershipStatus,
+        },
+        'Chief Librarian'
+      );
+      await loadData();
+      setShowEditMemberModal(false);
+      alert('Student profile, allotted desk, fee schedule, and expiry date updated successfully!');
+    } catch (err: any) {
+      console.error('Error updating member:', err);
+      alert(err?.message || 'Error updating student allotments.');
+    } finally {
+      setIsSavingMemberEdit(false);
+    }
   };
 
   const handleIssueWarning = async (e: React.FormEvent) => {
@@ -3357,6 +3459,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
       {/* ----------------- MODALS ----------------- */}
 
+      {/* DUPLICATE MEMBER WARNING POPUP */}
+      {memberDuplicateError && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '520px',
+              border: '1px solid rgba(239, 68, 68, 0.45)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.7), 0 0 25px rgba(239, 68, 68, 0.2)',
+              background: '#0B132B',
+              borderRadius: '16px',
+              padding: '26px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '18px' }}>
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '12px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#EF4444',
+                  flexShrink: 0,
+                }}
+              >
+                <AlertCircle size={26} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#FFFFFF', margin: 0, letterSpacing: '-0.01em' }}>
+                  {memberDuplicateError.title}
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: '#F87171', marginTop: '3px', fontWeight: '600' }}>
+                  Duplicate Prevention &amp; Identity Protection
+                </div>
+              </div>
+            </div>
+
+            <p style={{ color: '#E2E8F0', fontSize: '0.92rem', lineHeight: '1.55', marginBottom: '16px' }}>
+              {memberDuplicateError.message}
+            </p>
+
+            {memberDuplicateError.details && (
+              <div
+                style={{
+                  padding: '14px 16px',
+                  borderRadius: '10px',
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid rgba(234, 179, 8, 0.25)',
+                  color: 'var(--accent-gold)',
+                  fontSize: '0.86rem',
+                  lineHeight: '1.5',
+                  marginBottom: '22px',
+                }}
+              >
+                <div style={{ fontWeight: '700', marginBottom: '4px', color: '#FDE047', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ShieldAlert size={15} /> Directory Collision Details:
+                </div>
+                {memberDuplicateError.details}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="btn-gold"
+              style={{ width: '100%', padding: '12px 0', fontSize: '0.95rem', fontWeight: '700' }}
+              onClick={() => setMemberDuplicateError(null)}
+            >
+              Understood, Review &amp; Modify Details
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MODAL 1: ADD NEW MEMBER */}
       {showAddMemberModal && (
         <div className="modal-overlay">
@@ -3460,10 +3639,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-                <button type="submit" className="btn-gold" style={{ flex: 1 }}>
-                  Confirm Registration
+                <button
+                  type="submit"
+                  className="btn-gold"
+                  style={{ flex: 1, opacity: isAddingMember ? 0.75 : 1, cursor: isAddingMember ? 'not-allowed' : 'pointer' }}
+                  disabled={isAddingMember}
+                >
+                  {isAddingMember ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 className="animate-spin" size={16} /> Registering Member...
+                    </span>
+                  ) : (
+                    'Confirm Registration'
+                  )}
                 </button>
-                <button type="button" className="btn-outline" onClick={() => setShowAddMemberModal(false)}>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => setShowAddMemberModal(false)}
+                  disabled={isAddingMember}
+                >
                   Cancel
                 </button>
               </div>
@@ -3609,10 +3804,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-                <button id="admin-save-member-edit-btn" type="submit" className="btn-gold" style={{ flex: 1 }}>
-                  Save Allotments &amp; Profile
+                <button
+                  id="admin-save-member-edit-btn"
+                  type="submit"
+                  className="btn-gold"
+                  style={{ flex: 1, opacity: isSavingMemberEdit ? 0.75 : 1, cursor: isSavingMemberEdit ? 'not-allowed' : 'pointer' }}
+                  disabled={isSavingMemberEdit}
+                >
+                  {isSavingMemberEdit ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 className="animate-spin" size={16} /> Saving Allotments...
+                    </span>
+                  ) : (
+                    'Save Allotments & Profile'
+                  )}
                 </button>
-                <button type="button" className="btn-outline" onClick={() => setShowEditMemberModal(false)}>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => setShowEditMemberModal(false)}
+                  disabled={isSavingMemberEdit}
+                >
                   Cancel
                 </button>
               </div>

@@ -19,12 +19,12 @@ const getEnvVar = (key: string): string => {
 };
 
 const firebaseConfig = {
-  apiKey: getEnvVar('VITE_FIREBASE_API_KEY'),
-  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN'),
-  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID'),
-  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID'),
-  appId: getEnvVar('VITE_FIREBASE_APP_ID'),
+  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || 'AIzaSyB2TE5A1tB37kObPy2XTHAHFZd5CxAMuMo',
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || 'hikmah-library-94121.firebaseapp.com',
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || 'hikmah-library-94121',
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || 'hikmah-library-94121.firebasestorage.app',
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || '528730588235',
+  appId: getEnvVar('VITE_FIREBASE_APP_ID') || '1:528730588235:web:9c649af05d9637fbf639ce',
 };
 
 let app: FirebaseApp | null = null;

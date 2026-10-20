@@ -13,7 +13,7 @@
  */
 
 import { webcrypto } from 'node:crypto';
-import { validatePasswordPolicy } from '../src/utils/validation';
+import { validatePasswordPolicy } from '../src/utils/validation.ts';
 
 // Polyfill window.crypto for Node test environment
 if (!globalThis.crypto) {
@@ -24,6 +24,9 @@ if (!globalThis.window) {
     crypto: webcrypto,
     btoa: (str: string) => Buffer.from(str, 'binary').toString('base64'),
     atob: (b64: string) => Buffer.from(b64, 'base64').toString('binary'),
+    dispatchEvent: () => true,
+    addEventListener: () => {},
+    removeEventListener: () => {},
   };
 }
 
@@ -37,7 +40,10 @@ if (!globalThis.localStorage) {
   };
 }
 
-import { DataService } from '../src/services/dataService';
+import { DataService } from '../src/services/dataService.ts';
+
+// Ensure test verification operates strictly in-memory without polluting live production Firestore
+(DataService as any).isLiveFirebase = () => false;
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -2108,7 +2114,7 @@ async function runTests() {
       uid: `test-uid-${Date.now()}`,
       fullName: 'Test Student Aspirant',
       email: fakeStudentEmail,
-      phoneNumber: '+91 91234 56789',
+      phoneNumber: `+91 91${Date.now().toString().slice(-8)}`,
       registrationDate: '2026-10-18',
       joiningDate: '2026-10-18',
       membershipStatus: 'Active',
@@ -2140,7 +2146,7 @@ async function runTests() {
       uid: `uid-${Date.now()}`,
       fullName: formattedName,
       email: portalRegEmail,
-      phoneNumber: '+91 98765 00112',
+      phoneNumber: `+91 98${Date.now().toString().slice(-8)}`,
       registrationDate: '2026-10-18',
       joiningDate: '2026-10-18',
       membershipStatus: 'Active',
@@ -2162,6 +2168,9 @@ async function runTests() {
   assert(checkPassword(foundSelfReg?.passcode, 'SelfPass@999') === true, 'Self-registered student successfully logs in with registered password');
   assert(checkPassword(foundSelfReg?.passcode, 'WrongPass123') === false, 'Self-registered student login fails with wrong password');
 
+  // Clean up self-registered student
+  await DataService.deleteMember(selfRegistered.id, 'Test Cleanup');
+
   // Test 6: Permanent Member Deletion & Resurrection Prevention
   const memberToDeleteId = addedStudent.id;
   const memberDeleteResult = await DataService.deleteMember(memberToDeleteId, 'Chief Librarian');
@@ -2180,6 +2189,145 @@ async function runTests() {
 
   const syncMembers2 = await DataService.getMembers();
   assert(syncMembers2.find((m) => m.id === memberToDeleteId) === undefined, 'Subsequent getMembers call maintains permanent deletion');
+
+  // Suite 30: Member Duplicate Prevention, Multi-Click Resilience & Isolation
+  console.log('\nSuite 30: Member Duplicate Prevention, Multi-Click Resilience & Isolation');
+
+  // Test 1: Duplicate check by email (case-insensitive & whitespace trimmed)
+  const uniqueTestEmail = `duplicate_test_${Date.now()}@testdomain.com`;
+  const uniqueTestPhone = `89${Date.now().toString().slice(-8)}`;
+  const memberOriginal = await DataService.addMember(
+    {
+      uid: `uid-dup-${Date.now()}`,
+      fullName: 'Original Member',
+      email: uniqueTestEmail,
+      phoneNumber: `+91 ${uniqueTestPhone}`,
+      registrationDate: '2026-10-19',
+      joiningDate: '2026-10-19',
+      membershipStatus: 'Active',
+      batch: '24/7 Dedicated Access (No Shifts)',
+      studyTarget: 'KAS Aspirant',
+      seatNumber: 'Desk D-14',
+      warningCount: 0,
+      feeDueDate: '2026-11-19',
+      feeStatus: 'Paid',
+      monthlyFee: 1000,
+      feeReminders: [],
+      passcode: 'TestPass@2026',
+    },
+    'Admin Tester'
+  );
+  assert(Boolean(memberOriginal && memberOriginal.id), 'Original member successfully created');
+
+  // Test duplicate email check
+  const dupEmailCheck = DataService.checkMemberDuplicate(`  ${uniqueTestEmail.toUpperCase()}  `, '9111122222');
+  assert(dupEmailCheck.isDuplicate === true, 'Duplicate email detected (case-insensitive and trimmed)');
+  assert(Boolean(dupEmailCheck.message?.includes('email')), 'Duplicate message mentions email address');
+
+  // Test duplicate phone check (even with different country code formatting)
+  const dupPhoneCheck = DataService.checkMemberDuplicate('different_unique_email@test.com', `+91-${uniqueTestPhone}`);
+  assert(dupPhoneCheck.isDuplicate === true, 'Duplicate phone number detected (normalized 10 digits)');
+  assert(Boolean(dupPhoneCheck.message?.includes('mobile')), 'Duplicate message mentions mobile number');
+
+  // Test addMember rejection on duplicate email
+  let addDupThrew = false;
+  try {
+    await DataService.addMember(
+      {
+        uid: `uid-dup-try-${Date.now()}`,
+        fullName: 'Imposter Member',
+        email: uniqueTestEmail,
+        phoneNumber: `87${Date.now().toString().slice(-8)}`,
+        registrationDate: '2026-10-19',
+        joiningDate: '2026-10-19',
+        membershipStatus: 'Active',
+        batch: '24/7 Dedicated Access (No Shifts)',
+        studyTarget: 'Target',
+        seatNumber: 'Desk D-15',
+        warningCount: 0,
+        feeDueDate: '2026-11-19',
+        feeStatus: 'Paid',
+        monthlyFee: 1000,
+        feeReminders: [],
+        passcode: 'TestPass@2026',
+      },
+      'Admin Tester'
+    );
+  } catch (err: any) {
+    addDupThrew = true;
+    assert(err.message.includes('already exists'), 'addMember threw error indicating member already exists');
+  }
+  assert(addDupThrew === true, 'addMember strictly blocked duplicate email registration');
+
+  // Test self-exclusion during edit
+  const selfEditCheck = DataService.checkMemberDuplicate(uniqueTestEmail, uniqueTestPhone, memberOriginal.id);
+  assert(selfEditCheck.isDuplicate === false, 'checkMemberDuplicate permits member keeping their own email and phone upon edit');
+
+  // Test member refresh resilience: getLocalMembersSync immediately contains the member
+  const freshList = DataService.getLocalMembersSync();
+  const foundInFresh = freshList.find((m) => m.id === memberOriginal.id);
+  assert(foundInFresh !== undefined, 'Newly registered member persists on local sync (page refresh simulation)');
+  assert(foundInFresh?.email === uniqueTestEmail, 'Member email preserved exactly across local sync');
+
+  // Test deletion isolation: deleting memberOriginal should not delete or blacklist sibling members
+  const siblingEmail = `sibling_${Date.now()}@testdomain.com`;
+  const siblingPhone = `86${Date.now().toString().slice(-8)}`;
+  const siblingMember = await DataService.addMember(
+    {
+      uid: `uid-sibling-${Date.now()}`,
+      fullName: 'Sibling Member',
+      email: siblingEmail,
+      phoneNumber: siblingPhone,
+      registrationDate: '2026-10-19',
+      joiningDate: '2026-10-19',
+      membershipStatus: 'Active',
+      batch: '24/7 Dedicated Access (No Shifts)',
+      studyTarget: 'Target',
+      seatNumber: 'Desk D-16',
+      warningCount: 0,
+      feeDueDate: '2026-11-19',
+      feeStatus: 'Paid',
+      monthlyFee: 1000,
+      feeReminders: [],
+      passcode: 'TestPass@2026',
+    },
+    'Admin Tester'
+  );
+  assert(Boolean(siblingMember && siblingMember.id), 'Sibling member created');
+
+  // Delete original member
+  await DataService.deleteMember(memberOriginal.id, 'Admin Tester');
+  const membersAfterDelete = await DataService.getMembers();
+  assert(membersAfterDelete.find((m) => m.id === memberOriginal.id) === undefined, 'Original member deleted by ID');
+  assert(membersAfterDelete.find((m) => m.id === siblingMember.id) !== undefined, 'Sibling member remains intact after original deletion');
+
+  // Test re-registration of the same email: ensure email wasn't blacklisted forever
+  const reAddedMember = await DataService.addMember(
+    {
+      uid: `uid-readd-${Date.now()}`,
+      fullName: 'Re-added Member',
+      email: uniqueTestEmail,
+      phoneNumber: `+91 95${Date.now().toString().slice(-8)}`,
+      registrationDate: '2026-10-19',
+      joiningDate: '2026-10-19',
+      membershipStatus: 'Active',
+      batch: '24/7 Dedicated Access (No Shifts)',
+      studyTarget: 'Target',
+      seatNumber: 'Desk D-14',
+      warningCount: 0,
+      feeDueDate: '2026-11-19',
+      feeStatus: 'Paid',
+      monthlyFee: 1000,
+      feeReminders: [],
+      passcode: 'TestPass@2026',
+    },
+    'Admin Tester'
+  );
+  assert(Boolean(reAddedMember && reAddedMember.id), 'Previously deleted member email can be successfully re-registered without ghost deletion');
+
+  // Clean up re-added and sibling
+  await DataService.deleteMember(reAddedMember.id, 'Cleanup');
+  await DataService.deleteMember(siblingMember.id, 'Cleanup');
 
   console.log('\n------------------------------------------------------');
   console.log(`TOTAL TESTS: ${testsPassed + testsFailed} | PASSED: ${testsPassed} | FAILED: ${testsFailed}`);

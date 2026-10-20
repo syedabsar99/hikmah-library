@@ -10,7 +10,7 @@ import type {
   LibraryRule,
   CarouselPhoto,
 } from '../types';
-import { db, isFirebaseConfigured } from './firebase';
+import { db, isFirebaseConfigured } from './firebase.ts';
 import {
   collection,
   doc,
@@ -19,6 +19,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
 } from 'firebase/firestore';
 
@@ -42,312 +43,106 @@ const KEYS = {
 // Seed Data
 const INITIAL_MEMBERS: MemberProfile[] = [
   {
-    id: 'HIK-2025-001',
-    uid: 'mem-uid-001',
-    fullName: 'Bilal Ahmed',
-    email: 'bilal.ahmed@example.com',
-    phoneNumber: '+91 98765 43210',
-    registrationDate: '2026-09-14',
-    joiningDate: '2026-09-14',
-    membershipStatus: 'Active',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'UPSC Civil Services Examination',
-    seatNumber: 'Desk A-12',
-    warningCount: 1,
-    feeDueDate: '2026-10-14', // Expired / Overdue
-    feeStatus: 'Overdue',
-    monthlyFee: 1200,
-    feeReminders: [
-      {
-        id: 'rem-1',
-        date: '2026-10-15',
-        message: 'Friendly reminder: Your monthly membership fee of ₹1,200 was due on 2026-10-14. Please pay at the reception counter or via UPI.',
-        daysOverdue: 2,
-        sentBy: 'Chief Librarian',
-      },
-    ],
-    notes: 'Dedicated aspirant, regular morning student.',
-  },
-  {
-    id: 'HIK-2025-002',
-    uid: 'mem-uid-002',
-    fullName: 'Ayesha Khan',
-    email: 'ayesha.khan@example.com',
-    phoneNumber: '+91 98765 43211',
-    registrationDate: '2026-10-01',
-    joiningDate: '2026-10-01',
-    membershipStatus: 'Active',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'Chartered Accountancy (CA Final)',
-    seatNumber: 'Desk B-04',
-    warningCount: 0,
-    feeDueDate: '2026-11-01', // Active / Paid
-    feeStatus: 'Paid',
-    monthlyFee: 1200,
-    lastPaidDate: '2026-10-01',
-    feeReminders: [],
-    notes: 'Requires quiet zone for tax audit prep.',
-  },
-  {
-    id: 'HIK-2025-003',
-    uid: 'mem-uid-003',
-    fullName: 'Zaid Siddiqui',
-    email: 'zaid.siddiqui@example.com',
-    phoneNumber: '+91 98765 43212',
-    registrationDate: '2026-09-18',
-    joiningDate: '2026-09-18',
-    membershipStatus: 'Active',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'NEET-PG Medical Entrance',
-    seatNumber: 'Desk C-09',
-    warningCount: 4,
-    feeDueDate: '2026-10-18', // Due in 2 days
-    feeStatus: 'Due',
-    monthlyFee: 1500,
-    feeReminders: [],
-    notes: 'Previous warning on loud phone call in cabin.',
-  },
-  {
-    id: 'HIK-2025-004',
-    uid: 'mem-uid-004',
-    fullName: 'Fatima Zahra',
-    email: 'fatima.zahra@example.com',
-    phoneNumber: '+91 98765 43213',
-    registrationDate: '2026-09-28',
-    joiningDate: '2026-09-28',
-    membershipStatus: 'Active',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'GATE Engineering Exam',
-    seatNumber: 'Desk A-07',
-    warningCount: 0,
-    feeDueDate: '2026-10-28', // Active / Paid
-    feeStatus: 'Paid',
-    monthlyFee: 1200,
-    lastPaidDate: '2026-09-28',
-    feeReminders: [],
-    notes: 'Exemplary attendance record.',
-  },
-  {
-    id: 'HIK-2025-005',
-    uid: 'mem-uid-005',
-    fullName: 'Omar Farooq',
-    email: 'omar.farooq@example.com',
-    phoneNumber: '+91 98765 43214',
-    registrationDate: '2026-09-10',
-    joiningDate: '2026-09-10',
-    membershipStatus: 'Review',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'State Judicial Services',
-    seatNumber: 'Desk N-02',
-    warningCount: 9,
-    feeDueDate: '2026-10-10', // 6 days overdue
-    feeStatus: 'Overdue',
-    monthlyFee: 1200,
-    feeReminders: [
-      {
-        id: 'rem-2',
-        date: '2026-10-12',
-        message: 'Notice: Monthly membership fee of ₹1,200 is overdue by 6 days. Please clear dues.',
-        daysOverdue: 6,
-        sentBy: 'Chief Librarian',
-      },
-    ],
-    notes: 'Account on review threshold (9 warnings).',
-  },
-  {
-    id: 'HIK-2025-006',
-    uid: 'mem-uid-006',
-    fullName: 'Syed Noor Ul Absar',
-    email: 'syednoorulabsar@gmail.com',
-    phoneNumber: '+91 96224 97806',
-    registrationDate: '2026-10-17',
-    joiningDate: '2026-10-17',
-    membershipStatus: 'Active',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'UPSC Civil Services / Higher Studies',
-    seatNumber: 'Personal Cabin #01',
-    warningCount: 0,
-    feeDueDate: '2026-11-17',
-    feeStatus: 'Paid',
-    monthlyFee: 1200,
-    lastPaidDate: '2026-10-17',
-    feeReminders: [],
-    notes: 'Registered premium student member with dedicated cabin access.',
-  },
-  {
-    id: 'HIK-2025-007',
-    uid: 'mem-uid-007',
-    fullName: 'Syed Absemia',
-    email: 'syedabsemia@gmail.com',
-    phoneNumber: '+91 96224 97807',
+    id: 'HIK-2026-001',
+    uid: 'mem-real-001',
+    fullName: 'Syed Absar',
+    email: 'syedabsarmia@gmail.com',
+    phoneNumber: '+919622497807',
     registrationDate: '2026-10-18',
     joiningDate: '2026-10-18',
     membershipStatus: 'Active',
     batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'Competitive Exams / Higher Studies',
+    studyTarget: 'Competitive Exams/Higher Studies',
     seatNumber: 'Desk B-12',
     warningCount: 0,
     feeDueDate: '2026-11-18',
     feeStatus: 'Paid',
     monthlyFee: 1200,
-    lastPaidDate: '2026-10-18',
     feeReminders: [],
     passcode: 'Absar@12345',
-    notes: 'Registered student member with active 24/7 library access.',
+    notes: 'Registered member',
+  },
+  {
+    id: 'HIK-2026-002',
+    uid: 'mem-real-002',
+    fullName: 'Sadaf Majeed',
+    email: 'sadafmajeed555@gmail.com',
+    phoneNumber: '7006628964',
+    registrationDate: '2026-09-19',
+    joiningDate: '2026-09-19',
+    membershipStatus: 'Active',
+    batch: '24/7 Dedicated Access (No Shifts)',
+    studyTarget: 'NEET',
+    seatNumber: 'D-70',
+    warningCount: 0,
+    feeDueDate: '2026-11-19',
+    feeStatus: 'Paid',
+    monthlyFee: 1000,
+    feeReminders: [],
+    notes: 'Registered member',
+  },
+  {
+    id: 'HIK-2026-003',
+    uid: 'mem-real-003',
+    fullName: 'Syed Ahmed',
+    email: 'syedabsar02@gmail.com',
+    phoneNumber: '7780834427',
+    registrationDate: '2026-09-08',
+    joiningDate: '2026-09-08',
+    membershipStatus: 'Active',
+    batch: '24/7 Dedicated Access (No Shifts)',
+    studyTarget: 'UPSC',
+    seatNumber: 'D-80',
+    warningCount: 0,
+    feeDueDate: '2026-11-08',
+    feeStatus: 'Paid',
+    monthlyFee: 1000,
+    feeReminders: [],
+    notes: 'Registered member',
+  },
+  {
+    id: 'HIK-2026-004',
+    uid: 'mem-real-004',
+    fullName: 'Muneer Maqbool',
+    email: 'muneercusrinagar@gmail.com',
+    phoneNumber: '7006467029',
+    registrationDate: '2026-10-19',
+    joiningDate: '2026-10-19',
+    membershipStatus: 'Active',
+    batch: '24/7 Dedicated Access (No Shifts)',
+    studyTarget: 'B.ED',
+    seatNumber: 'D-14',
+    warningCount: 0,
+    feeDueDate: '2026-11-19',
+    feeStatus: 'Paid',
+    monthlyFee: 1000,
+    feeReminders: [],
+    notes: 'Registered member',
+  },
+  {
+    id: 'HIK-2026-005',
+    uid: 'mem-real-005',
+    fullName: 'syeeeed malikkk',
+    email: 'syeeeed444@gmail.com',
+    phoneNumber: '7006443322',
+    registrationDate: '2026-08-13',
+    joiningDate: '2026-08-13',
+    membershipStatus: 'Active',
+    batch: '24/7 Dedicated Access (No Shifts)',
+    studyTarget: 'NEET',
+    seatNumber: 'D-09',
+    warningCount: 0,
+    feeDueDate: '2026-09-13',
+    feeStatus: 'Overdue',
+    monthlyFee: 1000,
+    feeReminders: [],
+    notes: 'Registered member',
   },
 ];
 
-const INITIAL_WARNINGS: WarningRecord[] = [
-  {
-    id: 'warn-1',
-    memberId: 'HIK-2025-001',
-    memberName: 'Bilal Ahmed',
-    warningNumber: 1,
-    reason: 'Ringtone rang during silent focus hours in Cabin A',
-    severity: 'Minor',
-    issuedBy: 'Admin (Chief Librarian)',
-    issuedAt: '2025-02-14T10:30:00.000Z',
-  },
-  {
-    id: 'warn-2',
-    memberId: 'HIK-2025-003',
-    memberName: 'Zaid Siddiqui',
-    warningNumber: 1,
-    reason: 'Taking voice call inside quiet discussion corridor',
-    severity: 'Moderate',
-    issuedBy: 'Admin (Chief Librarian)',
-    issuedAt: '2025-02-18T16:15:00.000Z',
-  },
-  {
-    id: 'warn-3',
-    memberId: 'HIK-2025-003',
-    memberName: 'Zaid Siddiqui',
-    warningNumber: 2,
-    reason: 'Leaving personal study books on reserved desk overnight without permission',
-    severity: 'Minor',
-    issuedBy: 'Admin (Chief Librarian)',
-    issuedAt: '2025-02-22T08:00:00.000Z',
-  },
-  {
-    id: 'warn-4',
-    memberId: 'HIK-2025-003',
-    memberName: 'Zaid Siddiqui',
-    warningNumber: 3,
-    reason: 'Eating food at study workstation rather than designated cafeteria',
-    severity: 'Minor',
-    issuedBy: 'Admin (Chief Librarian)',
-    issuedAt: '2025-03-01T13:45:00.000Z',
-  },
-  {
-    id: 'warn-5',
-    memberId: 'HIK-2025-003',
-    memberName: 'Zaid Siddiqui',
-    warningNumber: 4,
-    reason: 'Unauthorized seat swapping during exam week peak hours',
-    severity: 'Moderate',
-    issuedBy: 'Admin (Chief Librarian)',
-    issuedAt: '2025-03-05T11:20:00.000Z',
-  },
-];
+const INITIAL_WARNINGS: WarningRecord[] = [];
 
-// Helper to generate dates for current month
-const getRecentDateString = (dayOffset: number): string => {
-  const d = new Date();
-  d.setDate(d.getDate() - dayOffset);
-  return d.toISOString().split('T')[0];
-};
-
-const INITIAL_ATTENDANCE: AttendanceRecord[] = [
-  // Today's records
-  {
-    id: 'att-today-1',
-    memberId: 'HIK-2025-001',
-    memberName: 'Bilal Ahmed',
-    date: getRecentDateString(0),
-    status: 'Present',
-    checkInTime: '06:15 AM',
-    markedBy: 'Admin (Chief Librarian)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'att-today-2',
-    memberId: 'HIK-2025-002',
-    memberName: 'Ayesha Khan',
-    date: getRecentDateString(0),
-    status: 'Present',
-    checkInTime: '02:05 PM',
-    markedBy: 'Admin (Chief Librarian)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'att-today-3',
-    memberId: 'HIK-2025-003',
-    memberName: 'Zaid Siddiqui',
-    date: getRecentDateString(0),
-    status: 'Late',
-    checkInTime: '08:45 AM',
-    markedBy: 'Admin (Chief Librarian)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'att-today-4',
-    memberId: 'HIK-2025-004',
-    memberName: 'Fatima Zahra',
-    date: getRecentDateString(0),
-    status: 'Present',
-    checkInTime: '06:05 AM',
-    markedBy: 'Admin (Chief Librarian)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  // Yesterday's records
-  {
-    id: 'att-yest-1',
-    memberId: 'HIK-2025-001',
-    memberName: 'Bilal Ahmed',
-    date: getRecentDateString(1),
-    status: 'Present',
-    checkInTime: '06:10 AM',
-    markedBy: 'Admin (Chief Librarian)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'att-yest-2',
-    memberId: 'HIK-2025-002',
-    memberName: 'Ayesha Khan',
-    date: getRecentDateString(1),
-    status: 'Excused',
-    markedBy: 'Admin (Chief Librarian)',
-    modifiedReason: 'Medical appointment',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'att-yest-3',
-    memberId: 'HIK-2025-003',
-    memberName: 'Zaid Siddiqui',
-    date: getRecentDateString(1),
-    status: 'Absent',
-    markedBy: 'Admin (Chief Librarian)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'att-yest-4',
-    memberId: 'HIK-2025-004',
-    memberName: 'Fatima Zahra',
-    date: getRecentDateString(1),
-    status: 'Present',
-    checkInTime: '06:00 AM',
-    markedBy: 'Admin (Chief Librarian)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+const INITIAL_ATTENDANCE: AttendanceRecord[] = [];
 
 const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
@@ -522,9 +317,9 @@ const INITIAL_AUDIT_LOGS: AuditLog[] = [
     action: 'MEMBER_REGISTERED',
     category: 'MEMBER',
     performedBy: 'Chief Librarian',
-    details: 'Registered member Bilal Ahmed (ID: HIK-2025-001) for Morning Shift.',
-    timestamp: '2025-01-10T09:00:00.000Z',
-    targetId: 'HIK-2025-001',
+    details: 'Registered member Syed Absar (ID: HIK-2026-001) for Dedicated 24/7 Access.',
+    timestamp: '2026-10-18T09:00:00.000Z',
+    targetId: 'HIK-2026-001',
   },
 ];
 
@@ -658,20 +453,15 @@ export function calculateFeeStatus(dueDateStr?: string): { status: 'Paid' | 'Due
   return { status: 'Paid', daysDiff: diffDays };
 }
 
+// Mutex to serialize concurrent member registrations and prevent double-clicks
+let addMemberMutex: Promise<any> = Promise.resolve();
+
 export const DataService = {
   // Database Mode Information
-  // Cloud Firestore is activated only if explicitly enabled in environment variables.
-  // When false, instant zero-lag persistent local storage is used, preventing PERMISSION_DENIED hangs.
+  // Google Cloud Firestore Live Backend (Real-Time Multi-Device Sync)
   isLiveFirebase(): boolean {
-    let enableFirestore = false;
-    try {
-      if (typeof import.meta !== 'undefined' && import.meta.env) {
-        enableFirestore = import.meta.env.VITE_ENABLE_FIRESTORE === 'true';
-      }
-    } catch {}
     return Boolean(
       isFirebaseConfigured() &&
-      enableFirestore &&
       db
     );
   },
@@ -710,9 +500,24 @@ export const DataService = {
   // Synchronous Local Storage Getters for Instant Zero-Flicker Initial Renders
   getLocalMembersSync(): MemberProfile[] {
     const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
-    const deletedSet = new Set(deletedList.map((s) => (s || '').toLowerCase().trim()));
+    // Prune any email addresses from deleted list so student emails are NEVER permanently tombstoned
+    const validDeletedIds = deletedList.filter((s) => {
+      const clean = (s || '').toLowerCase().trim();
+      return clean && !clean.includes('@');
+    });
+    if (validDeletedIds.length !== deletedList.length) {
+      saveLocal(KEYS.DELETED_MEMBERS, validDeletedIds);
+    }
+    const deletedSet = new Set(validDeletedIds.map((s) => s.toLowerCase().trim()));
 
     let list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
+
+    // Clean out dummy @example.com test accounts permanently
+    const nonDummyList = list.filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
+    if (nonDummyList.length !== list.length) {
+      list = nonDummyList.length > 0 ? nonDummyList : [...INITIAL_MEMBERS];
+      saveLocal(KEYS.MEMBERS, list);
+    }
 
     // Active members in local storage must NEVER be deleted by stale tombstones
     const existingEmails = new Set(list.map((m) => (m.email || '').toLowerCase().trim()));
@@ -720,7 +525,7 @@ export const DataService = {
 
     // Clean deletedSet to unblock any actively registered member
     let cleanedDeleted = false;
-    deletedList.forEach((item) => {
+    validDeletedIds.forEach((item) => {
       const clean = (item || '').toLowerCase().trim();
       if (existingEmails.has(clean) || existingIds.has(clean)) {
         deletedSet.delete(clean);
@@ -731,15 +536,14 @@ export const DataService = {
       saveLocal(KEYS.DELETED_MEMBERS, Array.from(deletedSet));
     }
 
-    // Automatically merge any newly added seed members UNLESS they were deleted by the admin!
+    // Automatically merge any newly added seed members UNLESS their ID was deleted by the admin!
     let hasNewSeed = false;
     for (const seed of INITIAL_MEMBERS) {
-      const seedEmail = (seed.email || '').toLowerCase().trim();
       const seedId = (seed.id || '').toLowerCase().trim();
-      if (deletedSet.has(seedEmail) || deletedSet.has(seedId)) {
+      if (deletedSet.has(seedId)) {
         continue;
       }
-      if (!existingEmails.has(seedEmail) && !existingIds.has(seedId)) {
+      if (!existingIds.has(seedId)) {
         list.push(seed);
         hasNewSeed = true;
       }
@@ -749,9 +553,9 @@ export const DataService = {
     }
 
     return list.map((m) => {
-      const joiningDate = m.joiningDate || m.registrationDate || '2025-01-15';
-      const feeDueDate = m.feeDueDate || '2026-11-14';
-      const monthlyFee = m.monthlyFee || 1200;
+      const joiningDate = m.joiningDate || m.registrationDate || '2026-10-18';
+      const feeDueDate = m.feeDueDate || '2026-11-18';
+      const monthlyFee = m.monthlyFee || 1000;
       const feeReminders = m.feeReminders || [];
       const currentFeeStatus: FeeStatus = m.feeStatus || 'Paid';
       const { status } = calculateFeeStatus(feeDueDate);
@@ -801,14 +605,13 @@ export const DataService = {
 
   // Cloud Synchronization for Multi-Device Student & Member Directory Consistency
   async syncCloudMembers(): Promise<MemberProfile[]> {
-    if (typeof window === 'undefined' || !window.location || typeof fetch === 'undefined') {
+    if (typeof window === 'undefined' || !window.location) {
       return this.getLocalMembersSync();
     }
     try {
       let cloudList: MemberProfile[] | null = null;
-      let cloudDeletedIds: string[] = [];
 
-      // 0. Primary Cloud Source: Google Cloud Firestore (50,000 free operations/day)
+      // 0. Primary Cloud Source: Google Cloud Firestore (Immediate live sync)
       if (this.isLiveFirebase() && db) {
         try {
           const snap = await getDocs(collection(db, 'member_profiles'));
@@ -820,105 +623,43 @@ export const DataService = {
         }
       }
 
-      // 1. Try internal /api/members as backup if firestore returned empty
-      if (!cloudList) {
-        try {
-          const res = await fetch(`/api/members?t=${Date.now()}`, {
-            cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-          });
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success && Array.isArray(json.members)) {
-              cloudList = json.members;
-            }
-            if (json.success && Array.isArray(json.deletedIds)) {
-              cloudDeletedIds = json.deletedIds;
-            }
-          }
-        } catch {}
-      }
+      if (cloudList && cloudList.length > 0) {
+        // Exclude dummy test accounts ending with @example.com
+        cloudList = cloudList.filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
 
-      // 2. Direct public Blob URL fallback
-      if (!cloudList) {
-        try {
-          const res = await fetch(`https://xuljvukumnyhzztx.public.blob.vercel-storage.com/members.json?t=${Date.now()}`);
-          if (res.ok) {
-            const json = await res.json();
-            if (Array.isArray(json)) {
-              cloudList = json;
-            }
-          }
-        } catch {}
-      }
-
-      if (cloudList) {
-        const localList = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
-
-        // Identify all actively registered member IDs and emails across local and cloud
-        const activeIds = new Set<string>();
-        const activeEmails = new Set<string>();
-        localList.forEach((m) => {
-          if (m.id) activeIds.add(m.id.toLowerCase().trim());
-          if (m.email) activeEmails.add(m.email.toLowerCase().trim());
-        });
-        cloudList.forEach((m) => {
-          if (m.id) activeIds.add(m.id.toLowerCase().trim());
-          if (m.email) activeEmails.add(m.email.toLowerCase().trim());
-        });
-
-        // Purge any active members from tombstone deleted list so they are NEVER blocked
-        const localDeleted = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
-        const allDeletedSet = new Set<string>();
-        [...localDeleted, ...cloudDeletedIds].forEach((s) => {
-          const clean = (s || '').toLowerCase().trim();
-          if (clean && !activeIds.has(clean) && !activeEmails.has(clean)) {
-            allDeletedSet.add(clean);
-          }
-        });
-        saveLocal(KEYS.DELETED_MEMBERS, Array.from(allDeletedSet));
+        const localList = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS)
+          .filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
 
         const mergedMap = new Map<string, MemberProfile>();
 
-        // 1. Initial seed members (skipping deleted)
-        INITIAL_MEMBERS.forEach((m) => {
-          const id = (m.id || '').toLowerCase().trim();
-          const email = (m.email || '').toLowerCase().trim();
-          if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
-            mergedMap.set(id || email, m);
-          }
-        });
-
-        // 2. Add local members (authoritative for recent additions on this client)
-        localList.forEach((m) => {
-          const id = (m.id || '').toLowerCase().trim();
-          const email = (m.email || '').toLowerCase().trim();
-          if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
-            mergedMap.set(id || email, m);
-          }
-        });
-
-        // 3. Merge cloud members (preserve persistent avatars and local updates)
+        // 1. Authoritative Cloud members from Firestore
         cloudList.forEach((m) => {
           const id = (m.id || '').toLowerCase().trim();
-          const email = (m.email || '').toLowerCase().trim();
-          if (!allDeletedSet.has(id) && !allDeletedSet.has(email)) {
-            const key = id || email;
-            const existing = mergedMap.get(key);
-            const persistedAvatar = this.getLocalAvatar(m.id || existing?.id || '');
-            const avatarUrl = m.avatarUrl || existing?.avatarUrl || persistedAvatar || '';
-            mergedMap.set(key, {
-              ...existing,
-              ...m,
-              avatarUrl,
-            });
+          if (id) {
+            const persistedAvatar = this.getLocalAvatar(m.id);
+            const avatarUrl = m.avatarUrl || persistedAvatar || '';
+            mergedMap.set(id, { ...m, avatarUrl });
+          }
+        });
+
+        // 2. If this local device has any real member not yet in Firestore, merge & push it
+        const activeDb = db;
+        localList.forEach((m) => {
+          const id = (m.id || '').toLowerCase().trim();
+          if (id && !mergedMap.has(id)) {
+            mergedMap.set(id, m);
+            if (this.isLiveFirebase() && activeDb && m.id) {
+              setDoc(doc(activeDb, 'member_profiles', m.id), m, { merge: true }).catch(console.warn);
+            }
           }
         });
 
         const mergedArray = Array.from(mergedMap.values());
         saveLocal(KEYS.MEMBERS, mergedArray);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('hikmah_members_synced', { detail: mergedArray }));
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          try {
+            window.dispatchEvent(new CustomEvent('hikmah_members_synced', { detail: mergedArray }));
+          } catch {}
         }
         return mergedArray;
       }
@@ -932,7 +673,8 @@ export const DataService = {
     // 1. Primary Cloud Target: Google Cloud Firestore (Immediate, 100% Free, 50,000 writes/day)
     if (this.isLiveFirebase() && db) {
       try {
-        for (const m of members) {
+        const cleanMembers = members.filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
+        for (const m of cleanMembers) {
           if (m.id) {
             await setDoc(doc(db, 'member_profiles', m.id), m, { merge: true });
           }
@@ -942,7 +684,7 @@ export const DataService = {
       }
     }
 
-    // 2. Secondary/Legacy Blob backup (fails silently if store is paused)
+    // 2. Secondary backup
     try {
       if (typeof window === 'undefined' || !window.location || typeof fetch === 'undefined') return;
       const deletedIds = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
@@ -951,9 +693,7 @@ export const DataService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save_all', members, deletedIds }),
       });
-    } catch (e) {
-      // Ignored: Blob fallback paused or network offline
-    }
+    } catch {}
   },
 
   // ---------------- MEMBERSHIP OPERATIONS ----------------
@@ -963,7 +703,7 @@ export const DataService = {
       try {
         const q = query(collection(db, 'member_profiles'), orderBy('id', 'asc'));
         const fetchPromise = getDocs(q);
-        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
         const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
         if (snapshot && !snapshot.empty) {
           list = snapshot.docs.map((doc) => doc.data() as MemberProfile);
@@ -973,36 +713,56 @@ export const DataService = {
       }
     }
 
-    // Merge Firestore list with local members so newly added local members are NEVER lost
-    const localMembers = this.getLocalMembersSync();
+    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+    const deletedSet = new Set(deletedList.map((s) => s.toLowerCase().trim()));
+
+    // Exclude dummy test accounts ending with @example.com AND any tombstoned IDs
+    list = list.filter((m) => {
+      const id = (m.id || '').toLowerCase().trim();
+      return m.email && !m.email.toLowerCase().endsWith('@example.com') && !deletedSet.has(id);
+    });
+
+    const localMembers = this.getLocalMembersSync().filter((m) => {
+      const id = (m.id || '').toLowerCase().trim();
+      return id && !deletedSet.has(id);
+    });
+
     if (list.length > 0) {
       const memberMap = new Map<string, MemberProfile>();
-      localMembers.forEach((m) => {
-        const key = (m.id || m.email || '').toLowerCase().trim();
-        if (key) memberMap.set(key, m);
-      });
       list.forEach((m) => {
         const key = (m.id || m.email || '').toLowerCase().trim();
-        if (key) {
-          const existing = memberMap.get(key);
-          memberMap.set(key, { ...existing, ...m });
+        const id = (m.id || '').toLowerCase().trim();
+        if (key && !deletedSet.has(id)) {
+          const persistedAvatar = this.getLocalAvatar(m.id);
+          const avatarUrl = m.avatarUrl || persistedAvatar || '';
+          memberMap.set(key, { ...m, avatarUrl });
         }
       });
+
+      // Preserve any unpushed locally registered members and sync to Firestore
+      const activeDb = db;
+      localMembers.forEach((m) => {
+        const key = (m.id || m.email || '').toLowerCase().trim();
+        const id = (m.id || '').toLowerCase().trim();
+        if (key && !memberMap.has(key) && !deletedSet.has(id)) {
+          memberMap.set(key, m);
+          if (this.isLiveFirebase() && activeDb && m.id) {
+            setDoc(doc(activeDb, 'member_profiles', m.id), m, { merge: true }).catch(console.warn);
+          }
+        }
+      });
+
       list = Array.from(memberMap.values());
+      saveLocal(KEYS.MEMBERS, list);
     } else {
       list = localMembers;
     }
 
-    // Trigger non-blocking background sync if in browser
-    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
-      this.syncCloudMembers().catch(() => {});
-    }
-
     // Refresh dynamic fee status based on current date and backfill missing schema fields
     const updated: MemberProfile[] = list.map((m) => {
-      const joiningDate = m.joiningDate || m.registrationDate || '2025-01-15';
-      const feeDueDate = m.feeDueDate || '2026-11-14';
-      const monthlyFee = m.monthlyFee || 1200;
+      const joiningDate = m.joiningDate || m.registrationDate || '2026-10-18';
+      const feeDueDate = m.feeDueDate || '2026-11-18';
+      const monthlyFee = m.monthlyFee || 1000;
       const feeReminders = m.feeReminders || [];
       const currentFeeStatus: FeeStatus = m.feeStatus || 'Paid';
 
@@ -1027,7 +787,10 @@ export const DataService = {
       };
     });
 
-    return updated;
+    return updated.filter((m) => {
+      const id = (m.id || '').toLowerCase().trim();
+      return id && !deletedSet.has(id);
+    });
   },
 
   async getMemberById(id: string): Promise<MemberProfile | null> {
@@ -1035,84 +798,159 @@ export const DataService = {
     return members.find((m) => m.id === id || m.uid === id) || null;
   },
 
+  checkMemberDuplicate(
+    email: string,
+    phoneNumber: string,
+    excludeMemberId?: string
+  ): { isDuplicate: boolean; field?: 'email' | 'phone'; member?: MemberProfile; message?: string } {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPhoneDigits = (phoneNumber || '').replace(/\D/g, '').slice(-10);
+
+    const members = this.getLocalMembersSync();
+
+    if (cleanEmail) {
+      const emailMatch = members.find((m) => {
+        if (excludeMemberId && (m.id === excludeMemberId || m.uid === excludeMemberId)) return false;
+        return (m.email || '').trim().toLowerCase() === cleanEmail;
+      });
+      if (emailMatch) {
+        return {
+          isDuplicate: true,
+          field: 'email',
+          member: emailMatch,
+          message: `A member with email "${cleanEmail}" already exists in the library directory (${emailMatch.fullName}, ID: ${emailMatch.id}). Duplicate email addresses are not permitted.`,
+        };
+      }
+    }
+
+    if (cleanPhoneDigits.length === 10) {
+      const phoneMatch = members.find((m) => {
+        if (excludeMemberId && (m.id === excludeMemberId || m.uid === excludeMemberId)) return false;
+        const p = (m.phoneNumber || '').replace(/\D/g, '').slice(-10);
+        return p === cleanPhoneDigits;
+      });
+      if (phoneMatch) {
+        return {
+          isDuplicate: true,
+          field: 'phone',
+          member: phoneMatch,
+          message: `A member with mobile number "${phoneNumber}" already exists in the library directory (${phoneMatch.fullName}, ID: ${phoneMatch.id}). Duplicate mobile numbers are not permitted.`,
+        };
+      }
+    }
+
+    return { isDuplicate: false };
+  },
+
   async addMember(member: Omit<MemberProfile, 'id'>, adminName: string): Promise<MemberProfile> {
-    const members = await this.getMembers();
-    
-    // Auto-generate next unique Member ID across ALL active and historical IDs
-    const year = new Date().getFullYear();
-    const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
-    const allKnownIds = [
-      ...members.map((m) => m.id),
-      ...deletedList,
-      ...INITIAL_MEMBERS.map((m) => m.id),
-    ];
-    let highestNum = 0;
-    for (const rawId of allKnownIds) {
-      if (typeof rawId === 'string') {
-        const match = rawId.match(/HIK-\d+-(\d+)/i);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (num > highestNum) highestNum = num;
+    // Wrap inside mutex to serialize concurrent clicks and prevent duplicates
+    return (addMemberMutex = addMemberMutex.catch(() => {}).then(async () => {
+      const members = await this.getMembers();
+
+      const cleanEmail = (member.email || '').toLowerCase().trim();
+      const cleanPhoneDigits = (member.phoneNumber || '').replace(/\D/g, '').slice(-10);
+
+      // 1. Strict Duplicate Check: Email
+      if (cleanEmail) {
+        const emailMatch = members.find((m) => (m.email || '').toLowerCase().trim() === cleanEmail);
+        if (emailMatch) {
+          throw new Error(
+            `A member with email "${cleanEmail}" already exists in the library directory (${emailMatch.fullName}, ID: ${emailMatch.id}). Duplicate emails are strictly prohibited.`
+          );
         }
       }
-    }
-    const nextSeq = String(highestNum + 1).padStart(3, '0');
-    const newId = `HIK-${year}-${nextSeq}`;
 
-    const joiningDate = member.joiningDate || new Date().toISOString().split('T')[0];
-    const feeDueDate = member.feeDueDate || advanceDueDateByOneMonth(joiningDate);
-
-    const newMember: MemberProfile = {
-      ...member,
-      id: newId,
-      uid: member.uid || `uid-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      joiningDate,
-      feeDueDate,
-      feeStatus: member.feeStatus || 'Paid',
-      monthlyFee: member.monthlyFee || 1200,
-      feeReminders: [],
-      warningCount: 0,
-      membershipStatus: member.membershipStatus || 'Active',
-      registrationDate: member.registrationDate || new Date().toISOString().split('T')[0],
-    };
-
-    const updated = [...members, newMember];
-    saveLocal(KEYS.MEMBERS, updated);
-
-    // Unblock this new member from deletedList both locally and on cloud
-    const cleanEmail = (member.email || '').toLowerCase().trim();
-    const cleanId = newId.toLowerCase().trim();
-    const filteredDeleted = deletedList.filter((s) => {
-      const clean = (s || '').toLowerCase().trim();
-      return clean !== cleanEmail && clean !== cleanId;
-    });
-    saveLocal(KEYS.DELETED_MEMBERS, filteredDeleted);
-
-    // Persist to Vercel Blob cloud storage immediately and await completion
-    await this.pushMembersToCloud(updated);
-
-    if (this.isLiveFirebase() && db) {
-      try {
-        await setDoc(doc(db, 'member_profiles', newId), newMember, { merge: true });
-      } catch (err) {
-        console.warn('Firebase addMember sync error:', err);
+      // 2. Strict Duplicate Check: Phone Number
+      if (cleanPhoneDigits.length === 10) {
+        const phoneMatch = members.find((m) => {
+          const p = (m.phoneNumber || '').replace(/\D/g, '').slice(-10);
+          return p === cleanPhoneDigits;
+        });
+        if (phoneMatch) {
+          throw new Error(
+            `A member with phone number "${member.phoneNumber}" already exists in the library directory (${phoneMatch.fullName}, ID: ${phoneMatch.id}). Duplicate phone numbers are strictly prohibited.`
+          );
+        }
       }
-    }
+      
+      // Auto-generate next unique Member ID across ALL active and historical IDs
+      const year = new Date().getFullYear();
+      const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
+      const allKnownIds = [
+        ...members.map((m) => m.id),
+        ...deletedList,
+        ...INITIAL_MEMBERS.map((m) => m.id),
+      ];
+      let highestNum = 0;
+      for (const rawId of allKnownIds) {
+        if (typeof rawId === 'string') {
+          const match = rawId.match(/HIK-\d+-(\d+)/i);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > highestNum) highestNum = num;
+          }
+        }
+      }
+      const nextSeq = String(highestNum + 1).padStart(3, '0');
+      const newId = `HIK-${year}-${nextSeq}`;
 
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('hikmah_member_updated', { detail: newMember }));
-      window.dispatchEvent(new CustomEvent('storage'));
-    }
+      const joiningDate = member.joiningDate || new Date().toISOString().split('T')[0];
+      const feeDueDate = member.feeDueDate || advanceDueDateByOneMonth(joiningDate);
 
-    await this.addAuditLog(
-      'MEMBER_REGISTERED',
-      'MEMBER',
-      `Registered new member ${newMember.fullName} with Member ID ${newId} (${newMember.batch}).`,
-      adminName,
-      newId
-    );
+      const newMember: MemberProfile = {
+        ...member,
+        id: newId,
+        uid: member.uid || `uid-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        joiningDate,
+        feeDueDate,
+        feeStatus: member.feeStatus || 'Paid',
+        monthlyFee: member.monthlyFee || 1200,
+        feeReminders: [],
+        warningCount: 0,
+        membershipStatus: member.membershipStatus || 'Active',
+        registrationDate: member.registrationDate || new Date().toISOString().split('T')[0],
+      };
 
-    return newMember;
+      const updated = [...members, newMember];
+      // Save locally immediately for 100% zero-lag persistence
+      saveLocal(KEYS.MEMBERS, updated);
+
+      // Unblock this new member ID & email from deletedList
+      const cleanId = newId.toLowerCase().trim();
+      const filteredDeleted = deletedList.filter((s) => {
+        const clean = (s || '').toLowerCase().trim();
+        return clean !== cleanEmail && clean !== cleanId;
+      });
+      saveLocal(KEYS.DELETED_MEMBERS, filteredDeleted);
+
+      // Persist to cloud asynchronously in background without blocking UI
+      this.pushMembersToCloud(updated).catch((err) => {
+        console.warn('Cloud sync background notice:', err);
+      });
+
+      if (this.isLiveFirebase() && db) {
+        setDoc(doc(db, 'member_profiles', newId), newMember, { merge: true }).catch((err) => {
+          console.warn('Firebase addMember sync error:', err);
+        });
+      }
+
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        try {
+          window.dispatchEvent(new CustomEvent('hikmah_member_updated', { detail: newMember }));
+          window.dispatchEvent(new CustomEvent('storage'));
+        } catch {}
+      }
+
+      await this.addAuditLog(
+        'MEMBER_REGISTERED',
+        'MEMBER',
+        `Registered new member ${newMember.fullName} with Member ID ${newId} (${newMember.batch}).`,
+        adminName,
+        newId
+      );
+
+      return newMember;
+    }));
   },
 
   async updateMember(id: string, updates: Partial<MemberProfile>, adminName: string): Promise<MemberProfile | null> {
@@ -1210,39 +1048,41 @@ export const DataService = {
     if (!target) return false;
 
     const targetId = (target.id || '').trim();
-    const targetEmail = (target.email || '').toLowerCase().trim();
 
-    // 1. Permanently record in deleted tracking list so it NEVER revives
+    // 1. Permanently record member ID in deleted tracking list so this ID is retired
     const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
-    const newDeletedSet = new Set<string>(deletedList.map((s) => (s || '').toLowerCase().trim()));
+    const newDeletedSet = new Set<string>();
+    deletedList.forEach((s) => {
+      const clean = (s || '').toLowerCase().trim();
+      // Keep only Member IDs in deletedList, NEVER email addresses!
+      if (clean && !clean.includes('@')) {
+        newDeletedSet.add(clean);
+      }
+    });
     if (targetId) newDeletedSet.add(targetId.toLowerCase());
-    if (targetEmail) newDeletedSet.add(targetEmail);
     const updatedDeletedList = Array.from(newDeletedSet);
     saveLocal(KEYS.DELETED_MEMBERS, updatedDeletedList);
 
-    // 2. Remove from local members list immediately
+    // 2. Remove ONLY this member by ID from local members list immediately
     const filtered = members.filter((m) => {
       const mId = (m.id || '').toLowerCase().trim();
-      const mEmail = (m.email || '').toLowerCase().trim();
-      return mId !== targetId.toLowerCase() && mEmail !== targetEmail;
+      const mUid = (m.uid || '').toLowerCase().trim();
+      return mId !== targetId.toLowerCase() && (!target.uid || mUid !== target.uid.toLowerCase());
     });
     saveLocal(KEYS.MEMBERS, filtered);
 
-    // 3. Delete from live cloud storage (Vercel Blob) immediately
-    try {
-      if (typeof window !== 'undefined' && window.location && typeof fetch !== 'undefined') {
-        await fetch('/api/members', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'delete',
-            id: targetId,
-            email: targetEmail,
-          }),
-        });
-      }
-    } catch (cloudErr) {
-      console.warn('Cloud delete error:', cloudErr);
+    // 3. Delete from live cloud storage (Vercel Blob) non-blocking in background
+    if (typeof window !== 'undefined' && window.location && typeof fetch !== 'undefined') {
+      fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          id: targetId,
+        }),
+      }).catch((cloudErr) => {
+        console.warn('Cloud delete error:', cloudErr);
+      });
     }
 
     // 4. Immediately purge all chat messages involving this deleted member
@@ -1275,14 +1115,17 @@ export const DataService = {
     );
 
     // 7. Broadcast global event so any active sessions or portals immediately terminate
-    try {
-      window.dispatchEvent(
-        new CustomEvent('hikmah_member_deleted', {
-          detail: { memberId: targetId, email: targetEmail, fullName: target.fullName },
-        })
-      );
-    } catch {
-      // Browser environment check
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try {
+        window.dispatchEvent(
+          new CustomEvent('hikmah_member_deleted', {
+            detail: { memberId: targetId, email: target.email, fullName: target.fullName },
+          })
+        );
+        window.dispatchEvent(new CustomEvent('storage'));
+      } catch {
+        // Browser environment check
+      }
     }
 
     return true;
@@ -1435,28 +1278,33 @@ export const DataService = {
     const cleanTarget = (email || '').trim().toLowerCase();
     if (!cleanTarget) return undefined;
 
-    // If marked deleted, never return them
     const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
-    const deletedSet = new Set(deletedList.map((s) => (s || '').toLowerCase().trim()));
-    if (deletedSet.has(cleanTarget)) {
-      return undefined;
-    }
+    const deletedSet = new Set(
+      deletedList
+        .filter((s) => typeof s === 'string' && !s.includes('@'))
+        .map((s) => s.toLowerCase().trim())
+    );
 
     const members = await this.getMembers();
     let found = members.find((m) => {
       const memberEmail = (m.email || '').trim().toLowerCase();
       if (memberEmail === cleanTarget) return true;
-      // Also match if user enters syedabsar99 or syednoorulabsar for Syed Noor Ul Absar
+      // Also match if user enters syedabsar99, syednoorulabsar, or syedabsemia
       if (
-        (cleanTarget === 'syedabsar99@gmail.com' || cleanTarget === 'syednoorulabsar@gmail.com') &&
-        (m.fullName.toLowerCase().includes('syed noor ul absar') || m.id === 'HIK-2025-006')
+        (cleanTarget === 'syedabsar99@gmail.com' || cleanTarget === 'syednoorulabsar@gmail.com' || cleanTarget === 'syedabsemia@gmail.com') &&
+        (m.fullName.toLowerCase().includes('absar') || m.id === 'HIK-2026-001')
       ) {
         return true;
       }
       return false;
     });
 
-    if (found) return found;
+    if (found) {
+      if (cleanTarget === 'syedabsemia@gmail.com') {
+        return { ...found, email: 'syedabsemia@gmail.com', fullName: 'Syed Absemia' };
+      }
+      return found;
+    }
 
     // If not found in current memory/local storage, attempt cloud sync
     if (typeof fetch !== 'undefined') {
@@ -1470,12 +1318,12 @@ export const DataService = {
       } catch {}
     }
 
-    // Direct fallback to INITIAL_MEMBERS (only if not deleted)
-    if (!deletedSet.has(cleanTarget)) {
+    // Direct fallback to INITIAL_MEMBERS (only if member ID not deleted)
+    if (!found) {
       found = INITIAL_MEMBERS.find((m) => {
         const mEmail = (m.email || '').trim().toLowerCase();
         const mId = (m.id || '').trim().toLowerCase();
-        return (mEmail === cleanTarget || mId === cleanTarget) && !deletedSet.has(mEmail) && !deletedSet.has(mId);
+        return (mEmail === cleanTarget || mId === cleanTarget) && !deletedSet.has(mId);
       });
     }
     return found;
@@ -1994,25 +1842,69 @@ export const DataService = {
   // ---------------- PRIVATE E2E ENCRYPTED MEMBER CHAT ----------------
   // Messages automatically delete after 12 hours to avoid overloading
   async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
-    const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
-    const twelveHoursAgo = Date.now() - 12 * 3600 * 1000;
-    // Auto-prune messages older than 12 hours
-    const valid = all.filter((m) => new Date(m.timestamp).getTime() > twelveHoursAgo);
-    if (valid.length !== all.length) {
-      saveLocal(KEYS.CHAT_MESSAGES, valid);
+    let cloudMsgs: ChatMessage[] = [];
+    if (this.isLiveFirebase() && db && sessionId) {
+      try {
+        const q = query(collection(db, 'chat_messages'), where('sessionId', '==', sessionId));
+        const snap = await getDocs(q);
+        if (snap && !snap.empty) {
+          cloudMsgs = snap.docs.map((d) => d.data() as ChatMessage);
+        }
+      } catch (err) {
+        console.warn('Firestore getChatMessages note:', err);
+      }
     }
-    return valid.filter((m) => m.sessionId === sessionId);
+
+    const localMsgs = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
+    const mergedMap = new Map<string, ChatMessage>();
+    localMsgs.forEach((m) => mergedMap.set(m.id, m));
+    cloudMsgs.forEach((m) => mergedMap.set(m.id, m));
+
+    const twelveHoursAgo = Date.now() - 12 * 3600 * 1000;
+    const legacyDummyIds = new Set(['hik-2025-001', 'hik-2025-002', 'hik-2025-003', 'hik-2025-004']);
+    // Auto-prune messages older than 12 hours and strip legacy dummy member chats
+    const valid = Array.from(mergedMap.values()).filter((m) => {
+      const isFresh = new Date(m.timestamp).getTime() > twelveHoursAgo;
+      const isLegacyDummy = legacyDummyIds.has((m.senderId || '').toLowerCase()) ||
+                            legacyDummyIds.has((m.recipientId || '').toLowerCase()) ||
+                            (m.sessionId || '').toLowerCase().includes('hik-2025-');
+      return isFresh && !isLegacyDummy;
+    });
+    saveLocal(KEYS.CHAT_MESSAGES, valid);
+    return valid
+      .filter((m) => m.sessionId === sessionId)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   },
 
   async getUnreadChatCounts(viewerId: string): Promise<{ total: number; bySender: Record<string, number> }> {
     if (!viewerId) return { total: 0, bySender: {} };
-    const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
-    const twelveHoursAgo = Date.now() - 12 * 3600 * 1000;
-    // Auto-prune messages older than 12 hours
-    const valid = all.filter((m) => new Date(m.timestamp).getTime() > twelveHoursAgo);
-    if (valid.length !== all.length) {
-      saveLocal(KEYS.CHAT_MESSAGES, valid);
+    let cloudMsgs: ChatMessage[] = [];
+    if (this.isLiveFirebase() && db) {
+      try {
+        const q = query(collection(db, 'chat_messages'), where('recipientId', '==', viewerId));
+        const snap = await getDocs(q);
+        if (snap && !snap.empty) {
+          cloudMsgs = snap.docs.map((d) => d.data() as ChatMessage);
+        }
+      } catch {}
     }
+
+    const localMsgs = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
+    const mergedMap = new Map<string, ChatMessage>();
+    localMsgs.forEach((m) => mergedMap.set(m.id, m));
+    cloudMsgs.forEach((m) => mergedMap.set(m.id, m));
+
+    const twelveHoursAgo = Date.now() - 12 * 3600 * 1000;
+    const legacyDummyIds = new Set(['hik-2025-001', 'hik-2025-002', 'hik-2025-003', 'hik-2025-004']);
+    const valid = Array.from(mergedMap.values()).filter((m) => {
+      const isFresh = new Date(m.timestamp).getTime() > twelveHoursAgo;
+      const isLegacyDummy = legacyDummyIds.has((m.senderId || '').toLowerCase()) ||
+                            legacyDummyIds.has((m.recipientId || '').toLowerCase()) ||
+                            (m.sessionId || '').toLowerCase().includes('hik-2025-');
+      return isFresh && !isLegacyDummy;
+    });
+    saveLocal(KEYS.CHAT_MESSAGES, valid);
+
     const unread = valid.filter((m) => m.recipientId === viewerId && m.status !== 'seen');
     const bySender: Record<string, number> = {};
     for (const m of unread) {
@@ -2025,7 +1917,6 @@ export const DataService = {
   },
 
   async sendChatMessage(message: Omit<ChatMessage, 'id' | 'timestamp' | 'expiresAt' | 'status'> & { status?: 'sent' | 'delivered' | 'seen' }): Promise<ChatMessage> {
-    const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     const newMessage: ChatMessage = {
       ...message,
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -2035,8 +1926,17 @@ export const DataService = {
       status: message.status || 'delivered',
     };
 
+    const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     const updated = [...all, newMessage];
     saveLocal(KEYS.CHAT_MESSAGES, updated);
+
+    // Persist to Google Cloud Firestore immediately for multi-device sync
+    if (this.isLiveFirebase() && db) {
+      setDoc(doc(db, 'chat_messages', newMessage.id), newMessage).catch((err) => {
+        console.warn('Firestore sendChatMessage error:', err);
+      });
+    }
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
         detail: { sessionId: newMessage.sessionId, senderId: newMessage.senderId, recipientId: newMessage.recipientId, action: 'sent' }
@@ -2051,6 +1951,9 @@ export const DataService = {
     const updated = all.map((m) => {
       if (m.sessionId === sessionId && m.recipientId === viewerId && m.status !== 'seen') {
         changed = true;
+        if (this.isLiveFirebase() && db) {
+          updateDoc(doc(db, 'chat_messages', m.id), { status: 'seen' }).catch(() => {});
+        }
         return { ...m, status: 'seen' as const };
       }
       return m;
@@ -2069,6 +1972,9 @@ export const DataService = {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     const updated = all.map((m) => (m.id === messageId ? { ...m, status } : m));
     saveLocal(KEYS.CHAT_MESSAGES, updated);
+    if (this.isLiveFirebase() && db) {
+      updateDoc(doc(db, 'chat_messages', messageId), { status }).catch(() => {});
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
         detail: { messageId, status, action: 'status' }
@@ -2078,8 +1984,17 @@ export const DataService = {
 
   async clearChatSession(sessionId: string): Promise<void> {
     const all = loadLocal<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
+    const toDelete = all.filter((m) => m.sessionId === sessionId);
     const remaining = all.filter((m) => m.sessionId !== sessionId);
     saveLocal(KEYS.CHAT_MESSAGES, remaining);
+
+    const activeDb = db;
+    if (this.isLiveFirebase() && activeDb) {
+      toDelete.forEach((m) => {
+        deleteDoc(doc(activeDb, 'chat_messages', m.id)).catch(() => {});
+      });
+    }
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('hikmah_chat_updated', {
         detail: { sessionId, action: 'cleared' }
@@ -2123,7 +2038,18 @@ export const DataService = {
 
   // ---------------- DYNAMIC FACILITIES & INFRASTRUCTURE ----------------
   async getFacilities(): Promise<LibraryFacility[]> {
-    const list = loadLocal<LibraryFacility[]>(KEYS.FACILITIES, INITIAL_FACILITIES);
+    let list = loadLocal<LibraryFacility[]>(KEYS.FACILITIES, INITIAL_FACILITIES);
+    if (this.isLiveFirebase() && db) {
+      try {
+        const snap = await getDocs(collection(db, 'facilities'));
+        if (snap && !snap.empty) {
+          list = snap.docs.map((d) => d.data() as LibraryFacility);
+          saveLocal(KEYS.FACILITIES, list);
+        }
+      } catch (err) {
+        console.warn('Firestore getFacilities note:', err);
+      }
+    }
     // Ensure cabin facility includes separate lockers for every student
     const cabin = list.find((f) => f.id === 'fac-1' || f.name.toLowerCase().includes('cabin'));
     if (cabin && !cabin.description.toLowerCase().includes('locker')) {
@@ -2143,6 +2069,9 @@ export const DataService = {
     };
     const updated = [...list, newFacility];
     saveLocal(KEYS.FACILITIES, updated);
+    if (this.isLiveFirebase() && db) {
+      setDoc(doc(db, 'facilities', newFacility.id), newFacility).catch(console.warn);
+    }
     return newFacility;
   },
 
@@ -2152,6 +2081,9 @@ export const DataService = {
     if (idx === -1) return null;
     list[idx] = { ...list[idx], ...updates };
     saveLocal(KEYS.FACILITIES, list);
+    if (this.isLiveFirebase() && db) {
+      updateDoc(doc(db, 'facilities', id), updates).catch(console.warn);
+    }
     return list[idx];
   },
 
@@ -2159,12 +2091,27 @@ export const DataService = {
     const list = await this.getFacilities();
     const filtered = list.filter((f) => f.id !== id);
     saveLocal(KEYS.FACILITIES, filtered);
+    if (this.isLiveFirebase() && db) {
+      deleteDoc(doc(db, 'facilities', id)).catch(console.warn);
+    }
     return true;
   },
 
   // ---------------- DYNAMIC LIBRARY RULES & CODE OF CONDUCT ----------------
   async getRules(): Promise<LibraryRule[]> {
-    return loadLocal<LibraryRule[]>(KEYS.RULES, INITIAL_RULES);
+    let list = loadLocal<LibraryRule[]>(KEYS.RULES, INITIAL_RULES);
+    if (this.isLiveFirebase() && db) {
+      try {
+        const snap = await getDocs(collection(db, 'rules'));
+        if (snap && !snap.empty) {
+          list = snap.docs.map((d) => d.data() as LibraryRule);
+          saveLocal(KEYS.RULES, list);
+        }
+      } catch (err) {
+        console.warn('Firestore getRules note:', err);
+      }
+    }
+    return list;
   },
 
   async addRule(rule: Omit<LibraryRule, 'id'>, _adminName: string): Promise<LibraryRule> {
@@ -2176,6 +2123,9 @@ export const DataService = {
     };
     const updated = [...list, newRule];
     saveLocal(KEYS.RULES, updated);
+    if (this.isLiveFirebase() && db) {
+      setDoc(doc(db, 'rules', newRule.id), newRule).catch(console.warn);
+    }
     return newRule;
   },
 
@@ -2185,6 +2135,9 @@ export const DataService = {
     if (idx === -1) return null;
     list[idx] = { ...list[idx], ...updates };
     saveLocal(KEYS.RULES, list);
+    if (this.isLiveFirebase() && db) {
+      updateDoc(doc(db, 'rules', id), updates).catch(console.warn);
+    }
     return list[idx];
   },
 
@@ -2192,12 +2145,27 @@ export const DataService = {
     const list = await this.getRules();
     const filtered = list.filter((r) => r.id !== id);
     saveLocal(KEYS.RULES, filtered);
+    if (this.isLiveFirebase() && db) {
+      deleteDoc(doc(db, 'rules', id)).catch(console.warn);
+    }
     return true;
   },
 
   // ---------------- DYNAMIC PHOTO CAROUSEL & CAMPUS GALLERY (MAX 8 PHOTOS) ----------------
   async getCarouselPhotos(): Promise<CarouselPhoto[]> {
-    return loadLocal<CarouselPhoto[]>(KEYS.CAROUSEL_PHOTOS, INITIAL_CAROUSEL_PHOTOS);
+    let list = loadLocal<CarouselPhoto[]>(KEYS.CAROUSEL_PHOTOS, INITIAL_CAROUSEL_PHOTOS);
+    if (this.isLiveFirebase() && db) {
+      try {
+        const snap = await getDocs(collection(db, 'carousel_photos'));
+        if (snap && !snap.empty) {
+          list = snap.docs.map((d) => d.data() as CarouselPhoto);
+          saveLocal(KEYS.CAROUSEL_PHOTOS, list);
+        }
+      } catch (err) {
+        console.warn('Firestore getCarouselPhotos note:', err);
+      }
+    }
+    return list;
   },
 
   async addCarouselPhoto(
@@ -2220,6 +2188,9 @@ export const DataService = {
     };
     const updated = [...list, newPhoto];
     saveLocal(KEYS.CAROUSEL_PHOTOS, updated);
+    if (this.isLiveFirebase() && db) {
+      setDoc(doc(db, 'carousel_photos', newPhoto.id), newPhoto).catch(console.warn);
+    }
     await this.addAuditLog(
       'CAROUSEL_PHOTO_ADDED',
       'SYSTEM',
@@ -2246,6 +2217,9 @@ export const DataService = {
       isCustom: true,
     };
     saveLocal(KEYS.CAROUSEL_PHOTOS, list);
+    if (this.isLiveFirebase() && db) {
+      setDoc(doc(db, 'carousel_photos', id), list[idx]).catch(console.warn);
+    }
     await this.addAuditLog(
       'CAROUSEL_PHOTO_REPLACED',
       'SYSTEM',
@@ -2267,6 +2241,9 @@ export const DataService = {
     const filtered = list.filter((p) => p.id !== id);
     const reordered = filtered.map((p, idx) => ({ ...p, order: idx + 1 }));
     saveLocal(KEYS.CAROUSEL_PHOTOS, reordered);
+    if (this.isLiveFirebase() && db) {
+      deleteDoc(doc(db, 'carousel_photos', id)).catch(console.warn);
+    }
     await this.addAuditLog(
       'CAROUSEL_PHOTO_DELETED',
       'SYSTEM',

@@ -65,6 +65,7 @@ export default async function handler(req: any, res: any) {
         success: true,
         members: currentMembers,
         deletedIds: deletedIds,
+        isEmpty: currentMembers.length === 0,
       });
     }
 
@@ -74,25 +75,20 @@ export default async function handler(req: any, res: any) {
 
       if (action === 'delete') {
         const idToDelete = (body?.id || '').trim();
-        const emailToDelete = (body?.email || '').toLowerCase().trim();
 
-        if (!idToDelete && !emailToDelete) {
-          return res.status(400).json({ error: 'Missing id or email to delete' });
+        if (!idToDelete) {
+          return res.status(400).json({ error: 'Missing id to delete' });
         }
 
-        // Filter out from currentMembers
+        // Filter out ONLY by member id so another member or re-registration is never accidentally deleted
         currentMembers = currentMembers.filter((m: any) => {
           const mId = (m.id || '').trim();
-          const mEmail = (m.email || '').toLowerCase().trim();
-          if (idToDelete && mId === idToDelete) return false;
-          if (emailToDelete && mEmail === emailToDelete) return false;
-          return true;
+          return mId.toLowerCase() !== idToDelete.toLowerCase();
         });
 
-        // Add to deletedIds (both id and email so neither can ever revive)
+        // Add to deletedIds (only member ID, NEVER email)
         const newDeletedSet = new Set<string>(deletedIds);
-        if (idToDelete) newDeletedSet.add(idToDelete);
-        if (emailToDelete) newDeletedSet.add(emailToDelete);
+        newDeletedSet.add(idToDelete.toLowerCase());
         deletedIds = Array.from(newDeletedSet);
 
         // Commit both files to Blob
@@ -127,7 +123,6 @@ export default async function handler(req: any, res: any) {
           success: true,
           action: 'deleted',
           id: idToDelete,
-          email: emailToDelete,
           members: currentMembers,
           deletedIds,
         });
