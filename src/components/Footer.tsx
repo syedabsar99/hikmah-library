@@ -11,10 +11,8 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const [imgError, setImgError] = useState(false);
-  const { adminPhone, adminEmail } = useAuth();
-  const cleanPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
-  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
-  const contactEmail = adminEmail || 'syedabsar99@gmail.com';
+  const { adminEmail } = useAuth();
+  const contactEmail = adminEmail || 'hikmahlibrary6@gmail.com';
 
   return (
     <footer className="app-footer">
@@ -74,14 +72,26 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               </div>
               <div className="footer-link-item">
                 <Phone size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
-                <a href={`tel:${cleanPhone}`} className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
-                  {displayPhone}
+                <a href="tel:7006523332" className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
+                  +91 70065 23332 <span style={{ color: 'var(--accent-gold)', fontSize: '0.74rem', fontWeight: '700', marginLeft: '4px' }}>(Primary)</span>
+                </a>
+              </div>
+              <div className="footer-link-item">
+                <Phone size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
+                <a href="tel:7889527218" className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
+                  +91 78895 27218
+                </a>
+              </div>
+              <div className="footer-link-item">
+                <Phone size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />
+                <a href="tel:9599891661" className="footer-text" style={{ color: '#E2E8F0', textDecoration: 'none' }}>
+                  +91 95998 91661
                 </a>
               </div>
               <div className="footer-link-item">
                 <MessageCircle size={16} style={{ color: '#25D366', flexShrink: 0 }} />
-                <a href={`https://wa.me/91${cleanPhone.slice(-10)}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', fontWeight: '600' }} className="footer-text">
-                  WhatsApp: {displayPhone}
+                <a href="https://wa.me/917006523332" target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', fontWeight: '600' }} className="footer-text">
+                  WhatsApp: +91 70065 23332
                 </a>
               </div>
               <div className="footer-link-item">

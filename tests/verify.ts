@@ -70,7 +70,7 @@ async function runTests() {
   const exposedDefaultPass = 'AdminHikmah#2025!';
 
   let adminStore: { email: string; password: string | null; isProvisioned: boolean } = {
-    email: 'syedabsar99@gmail.com',
+    email: 'hikmahlibrary6@gmail.com',
     password: null,
     isProvisioned: false,
   };
@@ -97,7 +97,7 @@ async function runTests() {
   };
 
   const strongMasterPass = 'Secure#HikmahAdmin2026';
-  assert(provisionAdmin('syedabsar99@gmail.com', strongMasterPass).success === true, 'Administrator master account securely provisioned');
+  assert(provisionAdmin('hikmahlibrary6@gmail.com', strongMasterPass).success === true, 'Administrator master account securely provisioned');
   assert(verifyAdminLogin(validAdminUser, strongMasterPass).success === true, 'Admin successfully logs in with provisioned credentials');
   assert(verifyAdminLogin(validAdminUser, exposedDefaultPass).success === false, 'SECURITY: Former exposed password AdminHikmah#2025! strictly rejected');
   assert(verifyAdminLogin(validAdminUser, invalidPass).success === false, 'Negative test: Incorrect password rejected');
@@ -631,11 +631,11 @@ async function runTests() {
   }
 
   // 1a. Normalization tests
-  const adminTest1 = normalizeIndianPhone('9622497806');
-  assert(adminTest1.isValid === true && adminTest1.e164 === '+919622497806', 'Normalized raw 10-digit admin number to E.164 +919622497806');
+  const adminTest1 = normalizeIndianPhone('7006523332');
+  assert(adminTest1.isValid === true && adminTest1.e164 === '+917006523332', 'Normalized raw 10-digit admin number to E.164 +917006523332');
 
-  const adminTest2 = normalizeIndianPhone('+91 96224 97806');
-  assert(adminTest2.isValid === true && adminTest2.raw10 === '9622497806', 'Stripped formatting and prepended country code correctly');
+  const adminTest2 = normalizeIndianPhone('+91 70065 23332');
+  assert(adminTest2.isValid === true && adminTest2.raw10 === '7006523332', 'Stripped formatting and prepended country code correctly');
 
   const invalidTest1 = normalizeIndianPhone('1234567890');
   assert(invalidTest1.isValid === false, 'Rejected invalid Indian mobile starting with 1');
@@ -644,7 +644,7 @@ async function runTests() {
   assert(invalidTest2.isValid === false, 'Rejected short incomplete phone number');
 
   // 2. Strict Role Isolation Tests
-  const registeredAdminPhone = '9622497806';
+  const registeredAdminPhone = '7006523332';
   const registeredMemberPhone = '9876543210';
 
   function checkEligibility(inputPhone: string, requestedRole: 'admin' | 'member') {
@@ -673,10 +673,10 @@ async function runTests() {
     return { eligible: false, error: 'Unknown role' };
   }
 
-  assert(checkEligibility('9622497806', 'admin').eligible === true, 'Admin verified successfully with registered admin phone');
+  assert(checkEligibility('7006523332', 'admin').eligible === true, 'Admin verified successfully with registered admin phone');
   assert(checkEligibility('9876543210', 'admin').eligible === false, 'SECURITY: Student phone strictly REJECTED from admin password recovery');
   assert(checkEligibility('9876543210', 'member').eligible === true, 'Student verified successfully with member directory phone');
-  assert(checkEligibility('9622497806', 'member').eligible === false, 'SECURITY: Admin phone strictly REJECTED from student passcode recovery');
+  assert(checkEligibility('7006523332', 'member').eligible === false, 'SECURITY: Admin phone strictly REJECTED from student passcode recovery');
   assert(checkEligibility('9111122222', 'member').eligible === false, 'Unregistered phone number strictly rejected before SMS dispatch');
 
   // 3. Password Complexity Enforcement
@@ -709,9 +709,9 @@ async function runTests() {
   assert(consumeTicket(testToken).success === true, 'First-time consumption of reset ticket succeeds');
   assert(consumeTicket(testToken).success === false, 'SECURITY: Replay attempt of consumed ticket strictly REJECTED (single-use guarantee)');
 
-  // --- 15. ADMIN EMAIL AUTHENTICATION & PASSWORD RESET (syedabsar99@gmail.com) ---
-  console.log('\nSuite 15: Admin Email Authentication & Reset (syedabsar99@gmail.com)');
-  const officialAdminEmail = 'syedabsar99@gmail.com';
+  // --- 15. ADMIN EMAIL AUTHENTICATION & PASSWORD RESET (hikmahlibrary6@gmail.com) ---
+  console.log('\nSuite 15: Admin Email Authentication & Reset (hikmahlibrary6@gmail.com)');
+  const officialAdminEmail = 'hikmahlibrary6@gmail.com';
 
   function normalizeEmail(input: string) {
     if (!input || typeof input !== 'string') return { isValid: false, email: '' };
@@ -720,11 +720,11 @@ async function runTests() {
     return { isValid, email: trimmed };
   }
 
-  const emailNormTest1 = normalizeEmail('syedabsar99@gmail.com');
-  assert(emailNormTest1.isValid === true && emailNormTest1.email === 'syedabsar99@gmail.com', 'Normalized official admin email syedabsar99@gmail.com');
+  const emailNormTest1 = normalizeEmail('hikmahlibrary6@gmail.com');
+  assert(emailNormTest1.isValid === true && emailNormTest1.email === 'hikmahlibrary6@gmail.com', 'Normalized official admin email hikmahlibrary6@gmail.com');
 
-  const emailNormTest2 = normalizeEmail('  SyedAbsar99@GMAIL.COM  ');
-  assert(emailNormTest2.isValid === true && emailNormTest2.email === 'syedabsar99@gmail.com', 'Case-insensitive trim and normalization verified');
+  const emailNormTest2 = normalizeEmail('  HikmahLibrary6@GMAIL.COM  ');
+  assert(emailNormTest2.isValid === true && emailNormTest2.email === 'hikmahlibrary6@gmail.com', 'Case-insensitive trim and normalization verified');
 
   const emailNormTest3 = normalizeEmail('not-an-email');
   assert(emailNormTest3.isValid === false, 'Invalid email pattern correctly rejected');
@@ -739,7 +739,7 @@ async function runTests() {
     return { eligible: true, email: norm.email };
   }
 
-  assert(verifyAdminEmail('syedabsar99@gmail.com').eligible === true, 'Official admin email syedabsar99@gmail.com authorized for admin access');
+  assert(verifyAdminEmail('hikmahlibrary6@gmail.com').eligible === true, 'Official admin email hikmahlibrary6@gmail.com authorized for admin access');
   assert(verifyAdminEmail('hacker@gmail.com').eligible === false, 'SECURITY: Unauthorized email strictly blocked from admin password reset');
   assert(verifyAdminEmail('student@gmail.com').eligible === false, 'SECURITY: Non-admin email strictly blocked from admin reset');
 
@@ -771,13 +771,13 @@ async function runTests() {
   const cooldownTracker = new Map<string, number>();
 
   // Registered Admin test
-  const adminResetRes = processAdminResetRequest('syedabsar99@gmail.com', cooldownTracker);
+  const adminResetRes = processAdminResetRequest('hikmahlibrary6@gmail.com', cooldownTracker);
   assert(adminResetRes.success === true, 'Registered admin email request accepted');
   assert(adminResetRes.dispatchedToProvider === true, 'Real reset email dispatched for verified administrator');
   assert(adminResetRes.message === GENERIC_RESET_RESPONSE, 'Admin receives generic anti-enumeration response');
 
   // Cooldown enforcement test
-  const immediateRetryRes = processAdminResetRequest('syedabsar99@gmail.com', cooldownTracker);
+  const immediateRetryRes = processAdminResetRequest('hikmahlibrary6@gmail.com', cooldownTracker);
   assert(immediateRetryRes.success === false, 'Immediate resend rejected by 60-second cooldown');
   assert((immediateRetryRes.cooldownSeconds || 0) > 0, 'Cooldown countdown active');
 
@@ -791,7 +791,7 @@ async function runTests() {
   // Firebase Action Code (oobCode) Verification & Consumption
   const mockActionCodes = new Map<string, { email: string; expired: boolean; used: boolean }>();
   const validOobCode = 'firebase_oob_cryptographic_code_abc123';
-  mockActionCodes.set(validOobCode, { email: 'syedabsar99@gmail.com', expired: false, used: false });
+  mockActionCodes.set(validOobCode, { email: 'hikmahlibrary6@gmail.com', expired: false, used: false });
 
   function verifyOobCode(code: string) {
     if (!code) return { success: false, error: 'Missing code' };
@@ -906,7 +906,7 @@ async function runTests() {
 
   // Test 1: Paid members do NOT receive or have reminder option
   const testDirectory = [
-    { id: 'S1', fullName: 'Zaid Khan', feeStatus: 'Paid', monthlyFee: 1200, phoneNumber: '9622497806' },
+    { id: 'S1', fullName: 'Zaid Khan', feeStatus: 'Paid', monthlyFee: 1200, phoneNumber: '9876543200' },
     { id: 'S2', fullName: 'Amina Mir', feeStatus: 'Overdue', monthlyFee: 1200, phoneNumber: '9876543210', feeDueDate: '2026-10-10' },
     { id: 'S3', fullName: 'Danish Bhat', feeStatus: 'Due', monthlyFee: 1200, phoneNumber: '9123456789', feeDueDate: '2026-10-20' },
   ];
@@ -1201,9 +1201,9 @@ async function runTests() {
   console.log('\nSuite 21: Strict Admin Authority, Dual Directory Verification & Instant Member Termination');
 
   // 1. Fixed Administrator Identity & Rejection of Unauthorized Emails
-  const MASTER_ADMIN_EMAIL = 'syedabsar99@gmail.com';
+  const MASTER_ADMIN_EMAIL = 'hikmahlibrary6@gmail.com';
   const MASTER_ADMIN_PASS = 'HikmahAdmin@2026!';
-  const MASTER_ADMIN_PHONE = '9622497806';
+  const MASTER_ADMIN_PHONE = '7006523332';
 
   function verifyAdminAccess(emailInput: string, passInput: string) {
     const clean = (emailInput || '').trim().toLowerCase();
@@ -1216,9 +1216,9 @@ async function runTests() {
     return { success: true };
   }
 
-  assert(verifyAdminAccess('syedabsar99@gmail.com', MASTER_ADMIN_PASS).success === true, 'Designated admin syedabsar99@gmail.com authenticated successfully');
+  assert(verifyAdminAccess('hikmahlibrary6@gmail.com', MASTER_ADMIN_PASS).success === true, 'Designated admin hikmahlibrary6@gmail.com authenticated successfully');
   assert(verifyAdminAccess('random.hacker@gmail.com', MASTER_ADMIN_PASS).success === false, 'SECURITY: Unauthorized administrator email strictly BLOCKED');
-  assert(verifyAdminAccess('syedabsar99@gmail.com', 'WrongPass').success === false, 'Incorrect admin password rejected');
+  assert(verifyAdminAccess('hikmahlibrary6@gmail.com', 'WrongPass').success === false, 'Incorrect admin password rejected');
 
   // 2. Dual Directory Verification (Email + Phone) for Student Account Opening
   const officialDirectory = [
@@ -1311,9 +1311,9 @@ async function runTests() {
   const simulatedDirectory = new Map<string, DirectoryMember>();
 
   // Seed Admin Account
-  simulatedFirebaseUsers.set('syedabsar99@gmail.com', {
+  simulatedFirebaseUsers.set('hikmahlibrary6@gmail.com', {
     uid: 'admin-chief-001',
-    email: 'syedabsar99@gmail.com',
+    email: 'hikmahlibrary6@gmail.com',
     passwordHash: 'InitialAdminPass#2026',
     role: 'admin',
   });
@@ -1357,7 +1357,7 @@ async function runTests() {
     }
 
     if (userType === 'admin') {
-      const isAdmin = cleanEmail === 'syedabsar99@gmail.com';
+      const isAdmin = cleanEmail === 'hikmahlibrary6@gmail.com';
       if (!isAdmin) {
         return { success: true, message: 'Enumeration safe response', providerDispatched: false };
       }
@@ -1452,7 +1452,7 @@ async function runTests() {
 
   // Test 1: Provider failure handled cleanly without claiming success
   simulatedFirebaseConfigured = false;
-  const unconfiguredRes = requestPasswordReset('syedabsar99@gmail.com', 'admin');
+  const unconfiguredRes = requestPasswordReset('hikmahlibrary6@gmail.com', 'admin');
   assert(unconfiguredRes.success === false, 'PROVIDER FAILURE: Unconfigured Firebase Auth returns actionable error');
   assert(unconfiguredRes.error?.includes('Firebase Authentication is not configured'), 'Clear configuration error returned when credentials missing');
   simulatedFirebaseConfigured = true;
@@ -1468,14 +1468,14 @@ async function runTests() {
   assert(unprovisionedMemberRes.needsActivation === true, 'System correctly flags unprovisioned member account');
 
   // Test 3: Action Code Verification States (valid, expired, already-used, malformed)
-  const adminResetDispatch = requestPasswordReset('syedabsar99@gmail.com', 'admin');
+  const adminResetDispatch = requestPasswordReset('hikmahlibrary6@gmail.com', 'admin');
   assert(adminResetDispatch.success === true && adminResetDispatch.providerDispatched === true, 'Admin reset request accepted and dispatched to provider');
   const validAdminCode = adminResetDispatch.code!;
 
   // Valid link
   const validVerify = verifyActionCode(validAdminCode);
   assert(validVerify.success === true, 'Valid Firebase reset code verified successfully');
-  assert(validVerify.email === 'syedabsar99@gmail.com', 'Target email correctly resolved from action code');
+  assert(validVerify.email === 'hikmahlibrary6@gmail.com', 'Target email correctly resolved from action code');
   assert(validVerify.role === 'admin', 'Target role correctly resolved as admin');
 
   // Malformed link
@@ -1486,7 +1486,7 @@ async function runTests() {
 
   // Expired link
   const expiredCode = 'oob_expired_sample_123';
-  simulatedActionCodes.set(expiredCode, { email: 'syedabsar99@gmail.com', expired: true, used: false });
+  simulatedActionCodes.set(expiredCode, { email: 'hikmahlibrary6@gmail.com', expired: true, used: false });
   const expiredVerify = verifyActionCode(expiredCode);
   assert(expiredVerify.success === false, 'Expired action code rejected');
   assert(expiredVerify.error?.includes('expired'), 'Specific expired link error message returned');
@@ -1512,10 +1512,10 @@ async function runTests() {
   assert(replayConfirm.success === false, 'SECURITY: Consumed reset code cannot be reused to change password again');
 
   // Test 7: Successful Login with New Password & Rejection of Old Password
-  const oldLoginAttempt = authenticateUser('syedabsar99@gmail.com', 'InitialAdminPass#2026', 'admin');
+  const oldLoginAttempt = authenticateUser('hikmahlibrary6@gmail.com', 'InitialAdminPass#2026', 'admin');
   assert(oldLoginAttempt.success === false, 'SECURITY: Old admin password strictly REJECTED after reset');
 
-  const newLoginAttempt = authenticateUser('syedabsar99@gmail.com', newAdminPassword, 'admin');
+  const newLoginAttempt = authenticateUser('hikmahlibrary6@gmail.com', newAdminPassword, 'admin');
   assert(newLoginAttempt.success === true, 'Admin successfully logs in with new password updated by reset');
 
   // Test 8: Member Password Reset & Login Flow End-to-End
@@ -2085,26 +2085,26 @@ async function runTests() {
   // --- 29. STUDENT CROSS-DEVICE EMAIL AUTHENTICATION & DIRECTORY PROVISIONING ---
   console.log('\nSuite 29: Student Cross-Device Email Authentication & Directory Provisioning');
 
-  // Test 1: Student Syed Absemia lookup by email
-  const studentEmail = 'syedabsemia@gmail.com';
+  // Test 1: Student Sadaf Majeed lookup by email
+  const studentEmail = 'sadafmajeed555@gmail.com';
   const foundStudent = await DataService.getMemberByEmail(studentEmail);
-  assert(foundStudent !== undefined, 'Registered student syedabsemia@gmail.com is successfully found in member directory');
-  assert(foundStudent?.fullName === 'Syed Absemia', 'Student Syed Absemia record name matches');
-  assert(foundStudent?.membershipStatus === 'Active', 'Student Syed Absemia is Active');
-  assert(foundStudent?.passcode === 'Absar@12345', 'Student Syed Absemia has provisioned initial passcode Absar@12345');
+  assert(foundStudent !== undefined, 'Registered student sadafmajeed555@gmail.com is successfully found in member directory');
+  assert(foundStudent?.fullName === 'Sadaf Majeed', 'Student Sadaf Majeed record name matches');
+  assert(foundStudent?.membershipStatus === 'Active', 'Student Sadaf Majeed is Active');
+  assert(foundStudent?.passcode === 'Sadaf@12345', 'Student Sadaf Majeed has provisioned initial passcode Sadaf@12345');
 
   // Test 2: Case-insensitivity in student email lookup
-  const upperCaseLookup = await DataService.getMemberByEmail('SYEDABSEMIA@GMAIL.COM');
-  assert(upperCaseLookup?.id === foundStudent?.id, 'Student email lookup is case-insensitive (SYEDABSEMIA@GMAIL.COM)');
+  const upperCaseLookup = await DataService.getMemberByEmail('SADAFMAJEED555@GMAIL.COM');
+  assert(upperCaseLookup?.id === foundStudent?.id, 'Student email lookup is case-insensitive (SADAFMAJEED555@GMAIL.COM)');
 
-  const spacedLookup = await DataService.getMemberByEmail('  syedabsemia@gmail.com  ');
+  const spacedLookup = await DataService.getMemberByEmail('  sadafmajeed555@gmail.com  ');
   assert(spacedLookup?.id === foundStudent?.id, 'Student email lookup safely trims whitespace');
 
-  // Test 3: Password verification logic for syedabsemia@gmail.com
+  // Test 3: Password verification logic for sadafmajeed555@gmail.com
   const checkPassword = (memberPasscode: string | undefined, inputPass: string) => {
     return Boolean(memberPasscode && memberPasscode === inputPass.trim());
   };
-  assert(checkPassword(foundStudent?.passcode, 'Absar@12345') === true, 'Correct password Absar@12345 authenticates student');
+  assert(checkPassword(foundStudent?.passcode, 'Sadaf@12345') === true, 'Correct password Sadaf@12345 authenticates student');
   assert(checkPassword(foundStudent?.passcode, 'WrongPassword#999') === false, 'Incorrect password correctly rejected');
 
   // Test 4: Dynamic addition of a new/fake student in directory and successful lookup

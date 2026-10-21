@@ -38,9 +38,9 @@ interface PublicHomeProps {
 
 export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
   const { isAdmin, adminPhone, adminEmail } = useAuth();
-  const cleanPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
-  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
-  const contactEmail = adminEmail || 'syedabsar99@gmail.com';
+  const cleanPhone = (adminPhone || '7006523332').replace(/[^0-9]/g, '');
+  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone || '70065 23332'}`;
+  const contactEmail = adminEmail || 'hikmahlibrary6@gmail.com';
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [facilities, setFacilities] = useState<LibraryFacility[]>([]);
   const [rules, setRules] = useState<LibraryRule[]>([]);
@@ -1335,33 +1335,77 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                 <div style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--accent-gold)', fontWeight: '700', letterSpacing: '0.06em' }}>
                   Direct Helpline
                 </div>
-                <h3 style={{ fontSize: '1.15rem', color: '#FFFFFF', margin: '6px 0 10px 0', fontWeight: '800' }}>
-                  {displayPhone}
+                <h3 style={{ fontSize: '1.15rem', color: '#FFFFFF', margin: '6px 0 4px 0', fontWeight: '800' }}>
+                  +91 70065 23332 <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: '600' }}>(Primary)</span>
                 </h3>
+                <div style={{ fontSize: '0.86rem', color: '#CBD5E1', marginBottom: '8px', fontWeight: '600' }}>
+                  +91 78895 27218 &bull; +91 95998 91661
+                </div>
                 <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: '1.55', margin: 0 }}>
-                  Speak directly with the Chief Librarian or administrative front desk for urgent queries and guidance.
+                  Speak directly with the Library Owner or administration front desk for urgent queries, admissions, and student guidance.
                 </p>
               </div>
-              <a
-                href={`tel:${cleanPhone}`}
-                style={{
-                  marginTop: '22px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '10px 18px',
-                  background: 'rgba(245, 158, 11, 0.15)',
-                  border: '1px solid rgba(245, 158, 11, 0.4)',
-                  color: 'var(--accent-gold)',
-                  borderRadius: 'var(--radius-md)',
-                  textDecoration: 'none',
-                  fontWeight: '700',
-                  fontSize: '0.86rem',
-                }}
-              >
-                <span>Call Administration Desk ↗</span>
-              </a>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '22px', flexWrap: 'wrap' }}>
+                <a
+                  href="tel:7006523332"
+                  style={{
+                    flex: '1',
+                    minWidth: '130px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '10px 14px',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: 'var(--accent-gold)',
+                    borderRadius: 'var(--radius-md)',
+                    textDecoration: 'none',
+                    fontWeight: '700',
+                    fontSize: '0.84rem',
+                  }}
+                >
+                  <span>Call Primary ↗</span>
+                </a>
+                <a
+                  href="tel:7889527218"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    padding: '10px 12px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#E2E8F0',
+                    borderRadius: 'var(--radius-md)',
+                    textDecoration: 'none',
+                    fontWeight: '600',
+                    fontSize: '0.82rem',
+                  }}
+                >
+                  <span>Line 2 ↗</span>
+                </a>
+                <a
+                  href="tel:9599891661"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    padding: '10px 12px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#E2E8F0',
+                    borderRadius: 'var(--radius-md)',
+                    textDecoration: 'none',
+                    fontWeight: '600',
+                    fontSize: '0.82rem',
+                  }}
+                >
+                  <span>Line 3 ↗</span>
+                </a>
+              </div>
             </div>
 
             {/* 4. Official Email */}

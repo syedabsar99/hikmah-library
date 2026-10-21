@@ -14,9 +14,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
   const [showContactDropdown, setShowContactDropdown] = useState(false);
   const contactDropdownRef = useRef<HTMLDivElement>(null);
 
-  const cleanPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
-  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
-  const contactEmail = adminEmail || 'syedabsar99@gmail.com';
+  const cleanPhone = (adminPhone || '7006523332').replace(/[^0-9]/g, '');
+  const contactEmail = adminEmail || 'hikmahlibrary6@gmail.com';
 
   const handleNav = (view: string) => {
     onNavigate(view);
@@ -98,7 +97,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <a
-                    href={`https://wa.me/91${cleanPhone.slice(-10)}`}
+                    href="https://wa.me/917006523332"
                     target="_blank"
                     rel="noreferrer"
                     className="nav-contact-item"
@@ -109,7 +108,49 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                     </div>
                     <div>
                       <div style={{ fontWeight: '700', color: '#FFFFFF' }}>WhatsApp Support</div>
-                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{displayPhone} • Quick Reply</div>
+                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>+91 70065 23332 • Quick Reply</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href="tel:7006523332"
+                    className="nav-contact-item"
+                    onClick={() => setShowContactDropdown(false)}
+                  >
+                    <div className="nav-contact-icon-box" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#FCD34D' }}>
+                      <Phone size={17} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '700', color: '#FFFFFF' }}>Helpline (Primary)</div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--accent-gold)', fontWeight: '700' }}>+91 70065 23332</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href="tel:7889527218"
+                    className="nav-contact-item"
+                    onClick={() => setShowContactDropdown(false)}
+                  >
+                    <div className="nav-contact-icon-box" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#FCD34D' }}>
+                      <Phone size={17} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '700', color: '#FFFFFF' }}>Administration Desk</div>
+                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>+91 78895 27218</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href="tel:9599891661"
+                    className="nav-contact-item"
+                    onClick={() => setShowContactDropdown(false)}
+                  >
+                    <div className="nav-contact-icon-box" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#FCD34D' }}>
+                      <Phone size={17} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '700', color: '#FFFFFF' }}>Administration Desk</div>
+                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>+91 95998 91661</div>
                     </div>
                   </a>
 
@@ -126,20 +167,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                     <div>
                       <div style={{ fontWeight: '700', color: '#FFFFFF' }}>Instagram</div>
                       <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>@hikmahlibraryandstudyhall</div>
-                    </div>
-                  </a>
-
-                  <a
-                    href={`tel:${cleanPhone}`}
-                    className="nav-contact-item"
-                    onClick={() => setShowContactDropdown(false)}
-                  >
-                    <div className="nav-contact-icon-box" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#FCD34D' }}>
-                      <Phone size={17} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: '700', color: '#FFFFFF' }}>Helpline / Direct Call</div>
-                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{displayPhone}</div>
                     </div>
                   </a>
 

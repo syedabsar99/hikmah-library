@@ -870,7 +870,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
               </p>
               <ol style={{ margin: '0 0 10px 0', paddingLeft: '18px' }}>
                 <li>
-                  <strong>Free Testing Phone Numbers:</strong> In Google Firebase Console (under <strong>Authentication &gt; Sign-in method &gt; Phone &gt; Phone numbers for testing</strong>), you can register the Admin number <code style={{ color: 'var(--accent-gold)' }}>+919622497806</code> and Member numbers with a fixed code like <code style={{ color: 'var(--accent-gold)' }}>123456</code>.
+                  <strong>Free Testing Phone Numbers:</strong> In Google Firebase Console (under <strong>Authentication &gt; Sign-in method &gt; Phone &gt; Phone numbers for testing</strong>), you can register the Admin number <code style={{ color: 'var(--accent-gold)' }}>+917006523332</code> and Member numbers with a fixed code like <code style={{ color: 'var(--accent-gold)' }}>123456</code>.
                 </li>
                 <li>
                   <strong>Zero Cost:</strong> These verifications are processed instantly by Google&apos;s official identity servers for <strong>₹0.00</strong> with unlimited attempts and zero billing.

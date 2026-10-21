@@ -9,7 +9,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { DataService } from './dataService';
 import { validatePasswordPolicy } from '../utils/validation';
 
-export const OFFICIAL_ADMIN_EMAIL = 'syedabsar99@gmail.com';
+export const OFFICIAL_ADMIN_EMAIL = 'hikmahlibrary6@gmail.com';
 export const ADMIN_CREDENTIALS_KEY = 'hikmah_admin_creds_v2';
 
 export const GENERIC_RESET_SUCCESS_MESSAGE =
@@ -96,7 +96,7 @@ class RealEmailAuthService {
       const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
       if (item) {
         const parsed = JSON.parse(item);
-        if (parsed.email && parsed.email.toLowerCase() === norm.email) {
+        if (parsed.email && parsed.email.toLowerCase() === norm.email && norm.email !== 'syedabsar99@gmail.com') {
           return true;
         }
       }

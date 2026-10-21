@@ -96,8 +96,8 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
   const { logout, adminPhone, adminEmail, updateAdminCredentials } = useAuth();
-  const cleanAdminPhone = (adminPhone || '9622497806').replace(/[^0-9]/g, '');
-  const displayAdminPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone}`;
+  const cleanAdminPhone = (adminPhone || '7006523332').replace(/[^0-9]/g, '');
+  const displayAdminPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone || '70065 23332'}`;
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
     | 'members'
@@ -1128,7 +1128,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       if (item) storedCreds = JSON.parse(item);
     } catch {}
 
-    const storedEmail = (storedCreds?.email || adminEmail || 'syedabsar99@gmail.com').toLowerCase();
+    const storedEmail = (storedCreds?.email || adminEmail || 'hikmahlibrary6@gmail.com').toLowerCase();
     const storedPass = storedCreds?.password;
 
     if (!storedPass) {
@@ -1139,7 +1139,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     const isEmailValid =
       emailTrim === storedEmail ||
       emailTrim === (adminEmail || '').toLowerCase() ||
-      emailTrim === 'syedabsar99@gmail.com' ||
+      emailTrim === 'hikmahlibrary6@gmail.com' ||
       emailTrim === 'admin@hikmahlibrary.com';
 
     if (!isEmailValid) {
@@ -2339,7 +2339,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   onClick={() => {
                     setNewAnnouncementData({
                       title: '💺 Seat Vacancy: Desk 03 & Cabin 31 (24/7 Access) Available',
-                      content: 'Official notice from administration: Desk 03 and Cabin 31 with dedicated workstation ownership, personal reading light, and power outlets are vacant for immediate admission with 24/7 round-the-clock access. Inquire at the front desk or call 9622497806.',
+                      content: 'Official notice from administration: Desk 03 and Cabin 31 with dedicated workstation ownership, personal reading light, and power outlets are vacant for immediate admission with 24/7 round-the-clock access. Inquire at the front desk or call 7006523332 / 7889527218 / 9599891661.',
                       category: 'Seat Vacancy',
                       isPinned: true,
                       dueDate: '',
@@ -4044,7 +4044,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   onClick={() => {
                     setNewAnnouncementData({
                       title: '💺 Seat Vacancy: Desk 03 & Cabin 31 (24/7 Access) Available',
-                      content: 'Official Administration Announcement: Desk 03 and Cabin 31 with dedicated workstation ownership, personal reading light, and power outlets are vacant for immediate admission with 24/7 round-the-clock access. Inquire at front desk or call 9622497806.',
+                      content: 'Official Administration Announcement: Desk 03 and Cabin 31 with dedicated workstation ownership, personal reading light, and power outlets are vacant for immediate admission with 24/7 round-the-clock access. Inquire at front desk or call 7006523332 / 7889527218 / 9599891661.',
                       category: 'Seat Vacancy',
                       isPinned: true,
                       dueDate: '',

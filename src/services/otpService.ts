@@ -3,17 +3,18 @@
 // ZERO on-screen web leakage of secret codes
 
 export const OFFICIAL_LIBRARY_EMAIL = 'hikmahlibrary6@gmail.com';
-export const OFFICIAL_LIBRARY_PHONE = '9622497806';
+export const OFFICIAL_LIBRARY_PHONE = '7006523332';
+export const OFFICIAL_LIBRARY_PHONES = ['7006523332', '7889527218', '9599891661'] as const;
 
 export const getActiveLibraryEmail = (): string => {
   try {
     const item = localStorage.getItem('hikmah_admin_creds_v2');
     if (item) {
       const parsed = JSON.parse(item);
-      if (parsed.email) return parsed.email;
+      if (parsed.email && parsed.email.toLowerCase() !== 'syedabsar99@gmail.com') return parsed.email;
     }
   } catch {}
-  return 'syedabsar99@gmail.com';
+  return OFFICIAL_LIBRARY_EMAIL;
 };
 
 export const getActiveLibraryPhone = (): string => {
@@ -21,10 +22,10 @@ export const getActiveLibraryPhone = (): string => {
     const item = localStorage.getItem('hikmah_admin_creds_v2');
     if (item) {
       const parsed = JSON.parse(item);
-      if (parsed.phone) return parsed.phone;
+      if (parsed.phone && parsed.phone.replace(/[^0-9]/g, '') !== '9622497806') return parsed.phone;
     }
   } catch {}
-  return '9622497806';
+  return OFFICIAL_LIBRARY_PHONE;
 };
 
 export interface OtpDispatchResult {
@@ -122,9 +123,9 @@ class MultiChannelOtpService {
 
     // Store under primary destination
     this.activeOtps.set(normalized, entry);
-    // If admin, mirror under both phone and email so either can verify
-    if (normalized === OFFICIAL_LIBRARY_PHONE || normalized === OFFICIAL_LIBRARY_EMAIL) {
-      this.activeOtps.set(OFFICIAL_LIBRARY_PHONE, entry);
+    // If admin, mirror under all admin phones and email so any can verify
+    if (OFFICIAL_LIBRARY_PHONES.includes(normalized as any) || normalized === OFFICIAL_LIBRARY_EMAIL) {
+      OFFICIAL_LIBRARY_PHONES.forEach((p) => this.activeOtps.set(p, entry));
       this.activeOtps.set(OFFICIAL_LIBRARY_EMAIL, entry);
     }
     this.saveToStorage();
@@ -189,8 +190,11 @@ class MultiChannelOtpService {
     }
 
     let record = this.activeOtps.get(normalized);
-    if (!record && (normalized === OFFICIAL_LIBRARY_PHONE || normalized === OFFICIAL_LIBRARY_EMAIL)) {
-      record = this.activeOtps.get(OFFICIAL_LIBRARY_PHONE) || this.activeOtps.get(OFFICIAL_LIBRARY_EMAIL);
+    if (!record && (OFFICIAL_LIBRARY_PHONES.includes(normalized as any) || normalized === OFFICIAL_LIBRARY_EMAIL)) {
+      record =
+        this.activeOtps.get(OFFICIAL_LIBRARY_PHONE) ||
+        OFFICIAL_LIBRARY_PHONES.map((p) => this.activeOtps.get(p)).find(Boolean) ||
+        this.activeOtps.get(OFFICIAL_LIBRARY_EMAIL);
     }
 
     if (!record) {
@@ -218,7 +222,7 @@ class MultiChannelOtpService {
 
     // Success -> consume code
     this.activeOtps.delete(normalized);
-    this.activeOtps.delete(OFFICIAL_LIBRARY_PHONE);
+    OFFICIAL_LIBRARY_PHONES.forEach((p) => this.activeOtps.delete(p));
     this.activeOtps.delete(OFFICIAL_LIBRARY_EMAIL);
     this.saveToStorage();
     return { success: true };

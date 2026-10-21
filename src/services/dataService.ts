@@ -43,28 +43,19 @@ const KEYS = {
   MEMBER_DIRECTORY: 'hikmah_member_directory_v1',
 };
 
+// Developer test emails and cards to permanently purge from website and directory
+const PERSONAL_EMAILS_TO_PURGE = new Set([
+  'syedabsar99@gmail.com',
+  'syedabsemia@gmail.com',
+  'absarsyed804@gmail.com',
+  'syedabsarmia@gmail.com',
+  'syedabsar02@gmail.com',
+  'syednoorulabsar@gmail.com',
+]);
+const PURGED_MEMBER_IDS = new Set(['hik-2026-001', 'hik-2026-031']);
+
 // Seed Data
 const INITIAL_MEMBERS: MemberProfile[] = [
-  {
-    id: 'HIK-2026-001',
-    uid: '4BOkJxfKzYfGiOhpgeAmVbQQDZN2',
-    fullName: 'Syed Absar',
-    email: 'syedabsemia@gmail.com',
-    phoneNumber: '+919622497807',
-    registrationDate: '2026-10-18',
-    joiningDate: '2026-10-18',
-    membershipStatus: 'Active',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'Competitive Exams/Higher Studies',
-    seatNumber: 'Desk B-12',
-    warningCount: 0,
-    feeDueDate: '2026-11-18',
-    feeStatus: 'Paid',
-    monthlyFee: 1200,
-    feeReminders: [],
-    passcode: 'Absar@12345',
-    notes: 'Registered member',
-  },
   {
     id: 'HIK-2026-002',
     uid: 'mem-real-002',
@@ -82,6 +73,8 @@ const INITIAL_MEMBERS: MemberProfile[] = [
     feeStatus: 'Paid',
     monthlyFee: 1000,
     feeReminders: [],
+    passcode: 'Sadaf@12345',
+    hasRegistered: true,
     notes: 'Registered member',
   },
   {
@@ -131,27 +124,6 @@ const INITIAL_MEMBERS: MemberProfile[] = [
       },
     ],
     passcode: 'Aman@123',
-    hasRegistered: true,
-    notes: 'Registered member',
-  },
-  {
-    id: 'HIK-2026-031',
-    uid: 'JVoQb6txHyX8Tg0ZgAVKujykqfl2',
-    fullName: 'syed noor ul absar',
-    email: 'absarsyed804@gmail.com',
-    phoneNumber: '9622497805',
-    registrationDate: '2026-10-20',
-    joiningDate: '2026-10-01',
-    membershipStatus: 'Active',
-    batch: '24/7 Dedicated Access (No Shifts)',
-    studyTarget: 'KAS',
-    seatNumber: 'D-333',
-    warningCount: 0,
-    feeDueDate: '2026-11-01',
-    feeStatus: 'Paid',
-    monthlyFee: 1000,
-    feeReminders: [],
-    passcode: 'Absar@123',
     hasRegistered: true,
     notes: 'Registered member',
   },
@@ -355,9 +327,9 @@ const INITIAL_AUDIT_LOGS: AuditLog[] = [
     action: 'MEMBER_REGISTERED',
     category: 'MEMBER',
     performedBy: 'Chief Librarian',
-    details: 'Registered member Syed Absar (ID: HIK-2026-001) for Dedicated 24/7 Access.',
-    timestamp: '2026-10-18T09:00:00.000Z',
-    targetId: 'HIK-2026-001',
+    details: 'Registered member Sadaf Majeed (ID: HIK-2026-002) for Dedicated 24/7 Access.',
+    timestamp: '2026-09-19T09:00:00.000Z',
+    targetId: 'HIK-2026-002',
   },
 ];
 
@@ -550,8 +522,14 @@ export const DataService = {
 
     let list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
 
-    // Clean out dummy @example.com test accounts permanently
-    const nonDummyList = list.filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
+    // Clean out dummy @example.com test accounts and personal developer test accounts permanently
+    const nonDummyList = list.filter((m) => {
+      const emailLower = (m.email || '').toLowerCase().trim();
+      const idLower = (m.id || '').toLowerCase().trim();
+      if (!emailLower || emailLower.endsWith('@example.com')) return false;
+      if (PERSONAL_EMAILS_TO_PURGE.has(emailLower) || PURGED_MEMBER_IDS.has(idLower)) return false;
+      return true;
+    });
     if (nonDummyList.length !== list.length) {
       list = nonDummyList.length > 0 ? nonDummyList : [...INITIAL_MEMBERS];
       saveLocal(KEYS.MEMBERS, list);
@@ -662,8 +640,14 @@ export const DataService = {
       }
 
       if (cloudList && cloudList.length > 0) {
-        // Exclude dummy test accounts ending with @example.com
-        cloudList = cloudList.filter((m) => m.email && !m.email.toLowerCase().endsWith('@example.com'));
+        // Exclude dummy test accounts and developer test accounts
+        cloudList = cloudList.filter((m) => {
+          const emailLower = (m.email || '').toLowerCase().trim();
+          const idLower = (m.id || '').toLowerCase().trim();
+          if (!emailLower || emailLower.endsWith('@example.com')) return false;
+          if (PERSONAL_EMAILS_TO_PURGE.has(emailLower) || PURGED_MEMBER_IDS.has(idLower)) return false;
+          return true;
+        });
 
         const mergedMap = new Map<string, MemberProfile>();
 
@@ -740,10 +724,13 @@ export const DataService = {
     const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
     const deletedSet = new Set(deletedList.map((s) => s.toLowerCase().trim()));
 
-    // Exclude dummy test accounts ending with @example.com AND any tombstoned IDs
+    // Exclude dummy test accounts ending with @example.com, personal developer accounts, AND any tombstoned IDs
     list = list.filter((m) => {
       const id = (m.id || '').toLowerCase().trim();
-      return m.email && !m.email.toLowerCase().endsWith('@example.com') && !deletedSet.has(id);
+      const emailLower = (m.email || '').toLowerCase().trim();
+      if (!m.email || emailLower.endsWith('@example.com')) return false;
+      if (PERSONAL_EMAILS_TO_PURGE.has(emailLower) || PURGED_MEMBER_IDS.has(id)) return false;
+      return !deletedSet.has(id);
     });
 
     const localMembers = this.getLocalMembersSync().filter((m) => {
@@ -834,14 +821,25 @@ export const DataService = {
     }
 
     if (list.length > 0) {
-      saveLocal(KEYS.MEMBER_DIRECTORY, list);
-      return list;
+      const cleanList = list.filter((m) => {
+        const id = (m.id || '').toLowerCase().trim();
+        return !PURGED_MEMBER_IDS.has(id);
+      });
+      saveLocal(KEYS.MEMBER_DIRECTORY, cleanList);
+      return cleanList;
     }
 
     // Fallback to local cache of directory or derive sanitized directory from local members
     const localDir = loadLocal<MemberDirectoryItem[]>(KEYS.MEMBER_DIRECTORY, []);
-    if (localDir.length > 0) {
-      return localDir;
+    const cleanLocalDir = localDir.filter((m) => {
+      const id = (m.id || '').toLowerCase().trim();
+      return !PURGED_MEMBER_IDS.has(id);
+    });
+    if (cleanLocalDir.length > 0) {
+      if (cleanLocalDir.length !== localDir.length) {
+        saveLocal(KEYS.MEMBER_DIRECTORY, cleanLocalDir);
+      }
+      return cleanLocalDir;
     }
 
     const localMembers = this.getLocalMembersSync();
@@ -1373,21 +1371,10 @@ export const DataService = {
     const members = await this.getMembers();
     let found = members.find((m) => {
       const memberEmail = (m.email || '').trim().toLowerCase();
-      if (memberEmail === cleanTarget) return true;
-      // Also match if user enters syedabsar99, syednoorulabsar, or syedabsemia
-      if (
-        (cleanTarget === 'syedabsar99@gmail.com' || cleanTarget === 'syednoorulabsar@gmail.com' || cleanTarget === 'syedabsemia@gmail.com') &&
-        (m.fullName.toLowerCase().includes('absar') || m.id === 'HIK-2026-001')
-      ) {
-        return true;
-      }
-      return false;
+      return memberEmail === cleanTarget;
     });
 
     if (found) {
-      if (cleanTarget === 'syedabsemia@gmail.com') {
-        return { ...found, email: 'syedabsemia@gmail.com', fullName: 'Syed Absemia' };
-      }
       return found;
     }
 

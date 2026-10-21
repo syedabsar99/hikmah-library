@@ -3,7 +3,8 @@ import { getFirebaseAuth, isFirebaseConfigured } from './firebase';
 import { DataService } from './dataService';
 import { validatePasswordPolicy } from '../utils/validation';
 
-export const OFFICIAL_ADMIN_PHONE = '9622497806';
+export const OFFICIAL_ADMIN_PHONE = '7006523332';
+export const OFFICIAL_ADMIN_PHONES = ['7006523332', '7889527218', '9599891661'] as const;
 const ADMIN_CREDENTIALS_KEY = 'hikmah_admin_creds_v2';
 
 export interface NormalizedIndianPhone {
@@ -135,7 +136,7 @@ class PhoneAuthManager {
       const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
       if (item) {
         const parsed = JSON.parse(item);
-        if (parsed.phone) {
+        if (parsed.phone && parsed.phone.replace(/[^0-9]/g, '') !== '9622497806') {
           const norm = this.normalizeIndianPhone(parsed.phone);
           if (norm.isValid) return norm.raw10;
         }
@@ -167,7 +168,9 @@ class PhoneAuthManager {
     }
 
     const adminPhone = this.getRegisteredAdminPhone();
-    const isAdminNumber = norm.raw10 === adminPhone || norm.raw10 === OFFICIAL_ADMIN_PHONE;
+    const isAdminNumber =
+      norm.raw10 === adminPhone ||
+      OFFICIAL_ADMIN_PHONES.includes(norm.raw10 as any);
 
     if (role === 'admin') {
       if (!isAdminNumber) {

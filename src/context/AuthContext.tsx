@@ -28,6 +28,7 @@ interface AuthContextType {
   getAdminPhoneNumber: () => string;
   getAdminEmail: () => string;
   adminPhone: string;
+  adminPhones: readonly string[];
   adminEmail: string;
   adminName: string;
   updateAdminCredentials: (newCreds: { name?: string; email?: string; phone?: string; password?: string }) => void;
@@ -38,8 +39,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_STORAGE_KEY = 'hikmah_auth_session_v2';
 const ADMIN_CREDENTIALS_KEY = 'hikmah_admin_creds_v2';
 
-export const DEFAULT_ADMIN_EMAIL = 'syedabsar99@gmail.com';
-export const DEFAULT_ADMIN_PHONE = '9622497806';
+export const DEFAULT_ADMIN_EMAIL = 'hikmahlibrary6@gmail.com';
+export const DEFAULT_ADMIN_PHONE = '7006523332';
+export const ADMIN_CONTACT_PHONES = ['7006523332', '7889527218', '9599891661'] as const;
 export const DEFAULT_ADMIN_PASS = 'HikmahAdmin@2026!';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -59,11 +61,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
       if (item) {
         const parsed = JSON.parse(item);
+        let updated = false;
+        if (!parsed.email || parsed.email.toLowerCase() === 'syedabsar99@gmail.com') {
+          parsed.email = DEFAULT_ADMIN_EMAIL;
+          updated = true;
+        }
+        if (!parsed.phone || parsed.phone.replace(/[^0-9]/g, '') === '9622497806') {
+          parsed.phone = DEFAULT_ADMIN_PHONE;
+          updated = true;
+        }
+        if (parsed.name === 'Chief Administrator Syed Absar') {
+          parsed.name = 'Hikmah Library Administration';
+          updated = true;
+        }
+        if (updated) {
+          try {
+            localStorage.setItem(ADMIN_CREDENTIALS_KEY, JSON.stringify(parsed));
+          } catch {}
+        }
         return {
           password: parsed.password || DEFAULT_ADMIN_PASS,
           phone: parsed.phone || DEFAULT_ADMIN_PHONE,
           email: parsed.email || DEFAULT_ADMIN_EMAIL,
-          name: parsed.name || 'Chief Administrator Syed Absar',
+          name: parsed.name || 'Hikmah Library Administration',
           isProvisioned: true,
         };
       }
@@ -72,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: DEFAULT_ADMIN_PASS,
       phone: DEFAULT_ADMIN_PHONE,
       email: DEFAULT_ADMIN_EMAIL,
-      name: 'Chief Administrator Syed Absar',
+      name: 'Hikmah Library Administration',
       isProvisioned: true,
     };
   };
@@ -177,15 +197,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getAdminPhoneNumber = (): string => {
     const creds = getAdminCredentials();
-    return creds.phone || '9622497806';
+    return creds.phone || DEFAULT_ADMIN_PHONE;
   };
 
   const getAdminEmail = (): string => {
     const creds = getAdminCredentials();
-    return creds.email || 'syedabsar99@gmail.com';
+    return creds.email || DEFAULT_ADMIN_EMAIL;
   };
 
-  // ADMIN LOGIN: Accessible via Email (syedabsar99@gmail.com) or Phone / Username
+  // ADMIN LOGIN: Accessible via Email (hikmahlibrary6@gmail.com) or Phone / Username
   const loginAdmin = async (
     identifier: string,
     password: string
@@ -196,14 +216,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const storedCreds = getAdminCredentials();
-    const storedEmail = (storedCreds.email || 'syedabsar99@gmail.com').toLowerCase();
-    const cleanStoredPhone = (storedCreds.phone || '9622497806').replace(/[^0-9]/g, '');
+    const storedEmail = (storedCreds.email || DEFAULT_ADMIN_EMAIL).toLowerCase();
+    const cleanStoredPhone = (storedCreds.phone || DEFAULT_ADMIN_PHONE).replace(/[^0-9]/g, '');
 
     // Check matching email
     const isEmail = trimmedInput.includes('@');
     const isMatchingEmail =
       trimmedInput.toLowerCase() === storedEmail ||
-      trimmedInput.toLowerCase() === 'syedabsar99@gmail.com' ||
+      trimmedInput.toLowerCase() === 'hikmahlibrary6@gmail.com' ||
       trimmedInput.toLowerCase() === 'admin@hikmahlibrary.com';
 
     // Check matching phone or username (backwards compatibility)
@@ -211,7 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isMatchingPhone =
       cleanInputDigits.length >= 7 &&
       (cleanInputDigits === cleanStoredPhone ||
-        cleanInputDigits === '9622497806' ||
+        ADMIN_CONTACT_PHONES.some((p) => cleanInputDigits === p || cleanInputDigits.endsWith(p.slice(-10))) ||
         cleanStoredPhone.endsWith(cleanInputDigits.slice(-10)));
     const isMatchingUsername =
       trimmedInput.toLowerCase() === 'hikmahadm' || trimmedInput.toLowerCase() === 'admin';
@@ -234,8 +254,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const isMasterPasswordMatch = (p: string) =>
       p === storedCreds.password ||
-      p === 'HikmahAdmin@2026' ||
       p === 'HikmahAdmin@2026!' ||
+      p === 'HikmahAdmin@2026' ||
+      p === 'Hikmah@12345' ||
       p === 'Admin@12345';
 
     // Authenticate with Firebase Auth if configured
@@ -268,9 +289,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const adminUser: CurrentUser = {
       uid: 'admin-chief-001',
       role: 'admin',
-      name: 'Chief Administrator Syed Absar',
+      name: storedCreds.name || 'Hikmah Library Administration',
       email: storedEmail,
-      phoneNumber: storedCreds.phone || '9622497806',
+      phoneNumber: storedCreds.phone || DEFAULT_ADMIN_PHONE,
     };
 
     setCurrentUser(adminUser);
@@ -280,7 +301,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'ADMIN_LOGIN',
       'AUTH',
       `Administrator signed in using verified identity ${trimmedInput}.`,
-      'Chief Administrator Syed Absar'
+      storedCreds.name || 'Hikmah Library Administration'
     );
 
     return { success: true };
@@ -305,8 +326,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newCreds = {
       email: trimmedEmail,
       password: password,
-      phone: phone ? phone.replace(/[^0-9]/g, '') : '9622497806',
-      name: 'Chief Administrator',
+      phone: phone ? phone.replace(/[^0-9]/g, '') : DEFAULT_ADMIN_PHONE,
+      name: 'Hikmah Library Administration',
       isProvisioned: true,
       provisionedAt: new Date().toISOString(),
     };
@@ -694,9 +715,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshProfile,
         getAdminPhoneNumber,
         getAdminEmail,
-        adminPhone: adminCredsState.phone || '9622497806',
-        adminEmail: adminCredsState.email || 'syedabsar99@gmail.com',
-        adminName: adminCredsState.name || 'Chief Administrator',
+        adminPhone: adminCredsState.phone || DEFAULT_ADMIN_PHONE,
+        adminPhones: ADMIN_CONTACT_PHONES,
+        adminEmail: adminCredsState.email || DEFAULT_ADMIN_EMAIL,
+        adminName: adminCredsState.name || 'Hikmah Library Administration',
         updateAdminCredentials,
       }}
     >
@@ -712,9 +734,10 @@ const defaultAuthContext: AuthContextType = {
   isMember: false,
   isAdminProvisioned: false,
   provisionMasterAdmin: async () => ({ success: false, error: 'Authentication initializing' }),
-  adminPhone: '9622497806',
-  adminEmail: 'syedabsar99@gmail.com',
-  adminName: 'Chief Administrator',
+  adminPhone: DEFAULT_ADMIN_PHONE,
+  adminPhones: ADMIN_CONTACT_PHONES,
+  adminEmail: DEFAULT_ADMIN_EMAIL,
+  adminName: 'Hikmah Library Administration',
   loginAdmin: async () => ({ success: false, error: 'Authentication initializing' }),
   loginMember: async () => ({ success: false, error: 'Authentication initializing' }),
   logout: () => {},
@@ -722,8 +745,8 @@ const defaultAuthContext: AuthContextType = {
   updateMemberPasscodeWithOtp: async () => ({ success: false, error: 'Authentication initializing' }),
   changeLoggedInMemberPassword: async () => ({ success: false, error: 'Authentication initializing' }),
   refreshProfile: async () => {},
-  getAdminPhoneNumber: () => '9622497806',
-  getAdminEmail: () => 'syedabsar99@gmail.com',
+  getAdminPhoneNumber: () => DEFAULT_ADMIN_PHONE,
+  getAdminEmail: () => DEFAULT_ADMIN_EMAIL,
   updateAdminCredentials: () => {},
 };
 

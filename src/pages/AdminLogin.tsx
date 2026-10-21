@@ -15,11 +15,25 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
   const [email, setEmail] = useState(() => {
     try {
       const saved = localStorage.getItem('hikmah_saved_admin_email');
+      if (!saved || saved.toLowerCase() === 'syedabsar99@gmail.com') {
+        localStorage.setItem('hikmah_saved_admin_email', DEFAULT_ADMIN_EMAIL);
+        return DEFAULT_ADMIN_EMAIL;
+      }
       return saved || adminEmail || DEFAULT_ADMIN_EMAIL;
     } catch {
       return adminEmail || DEFAULT_ADMIN_EMAIL;
     }
   });
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('hikmah_saved_admin_email');
+      if (!saved || saved.toLowerCase() === 'syedabsar99@gmail.com') {
+        localStorage.setItem('hikmah_saved_admin_email', DEFAULT_ADMIN_EMAIL);
+        setEmail(DEFAULT_ADMIN_EMAIL);
+      }
+    } catch {}
+  }, []);
 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -155,7 +169,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
                 }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="syedabsar99@gmail.com"
+                placeholder="hikmahlibrary6@gmail.com"
                 required
                 autoComplete="email"
               />
