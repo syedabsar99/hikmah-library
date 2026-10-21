@@ -66,9 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cleanEmail = (parsed.email || '').trim().toLowerCase();
         if (
           !cleanEmail ||
-          cleanEmail.includes('syedabsar') ||
-          cleanEmail.includes('syedabsemia') ||
-          cleanEmail.includes('absarsyed') ||
           cleanEmail !== DEFAULT_ADMIN_EMAIL
         ) {
           parsed.email = DEFAULT_ADMIN_EMAIL;
@@ -78,7 +75,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cleanPhoneDigits = (parsed.phone || '').replace(/[^0-9]/g, '');
         if (
           !cleanPhoneDigits ||
-          cleanPhoneDigits.endsWith('9622497806') ||
           !ADMIN_CONTACT_PHONES.some((p) => cleanPhoneDigits.endsWith(p))
         ) {
           parsed.phone = DEFAULT_ADMIN_PHONE;

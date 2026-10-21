@@ -136,7 +136,7 @@ class PhoneAuthManager {
       const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
       if (item) {
         const parsed = JSON.parse(item);
-        if (parsed.phone && parsed.phone.replace(/[^0-9]/g, '') !== '9622497806') {
+        if (parsed.phone) {
           const norm = this.normalizeIndianPhone(parsed.phone);
           if (norm.isValid) return norm.raw10;
         }

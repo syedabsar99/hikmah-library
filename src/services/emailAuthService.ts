@@ -96,7 +96,7 @@ class RealEmailAuthService {
       const item = localStorage.getItem(ADMIN_CREDENTIALS_KEY);
       if (item) {
         const parsed = JSON.parse(item);
-        if (parsed.email && parsed.email.toLowerCase() === norm.email && norm.email !== 'syedabsar99@gmail.com') {
+        if (parsed.email && parsed.email.toLowerCase() === norm.email) {
           return true;
         }
       }

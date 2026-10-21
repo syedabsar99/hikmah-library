@@ -15,7 +15,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
   const [email, setEmail] = useState(() => {
     try {
       const saved = localStorage.getItem('hikmah_saved_admin_email');
-      if (!saved || saved.toLowerCase() === 'syedabsar99@gmail.com') {
+      if (!saved) {
         localStorage.setItem('hikmah_saved_admin_email', DEFAULT_ADMIN_EMAIL);
         return DEFAULT_ADMIN_EMAIL;
       }
@@ -28,7 +28,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onNavigate, onSuccess })
   React.useEffect(() => {
     try {
       const saved = localStorage.getItem('hikmah_saved_admin_email');
-      if (!saved || saved.toLowerCase() === 'syedabsar99@gmail.com') {
+      if (!saved) {
         localStorage.setItem('hikmah_saved_admin_email', DEFAULT_ADMIN_EMAIL);
         setEmail(DEFAULT_ADMIN_EMAIL);
       }

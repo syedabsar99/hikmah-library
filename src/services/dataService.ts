@@ -43,16 +43,7 @@ const KEYS = {
   MEMBER_DIRECTORY: 'hikmah_member_directory_v1',
 };
 
-// Developer test emails and cards to permanently purge from website and directory
-const PERSONAL_EMAILS_TO_PURGE = new Set([
-  'syedabsar99@gmail.com',
-  'syedabsemia@gmail.com',
-  'absarsyed804@gmail.com',
-  'syedabsarmia@gmail.com',
-  'syedabsar02@gmail.com',
-  'syednoorulabsar@gmail.com',
-]);
-const PURGED_MEMBER_IDS = new Set(['hik-2026-001', 'hik-2026-031']);
+// No email/ID blacklists — the membership system must accept any valid member email.
 
 // Seed Data
 const INITIAL_MEMBERS: MemberProfile[] = [
@@ -522,12 +513,10 @@ export const DataService = {
 
     let list = loadLocal<MemberProfile[]>(KEYS.MEMBERS, INITIAL_MEMBERS);
 
-    // Clean out dummy @example.com test accounts and personal developer test accounts permanently
+    // Clean out dummy @example.com placeholder test accounts only
     const nonDummyList = list.filter((m) => {
       const emailLower = (m.email || '').toLowerCase().trim();
-      const idLower = (m.id || '').toLowerCase().trim();
       if (!emailLower || emailLower.endsWith('@example.com')) return false;
-      if (PERSONAL_EMAILS_TO_PURGE.has(emailLower) || PURGED_MEMBER_IDS.has(idLower)) return false;
       return true;
     });
     if (nonDummyList.length !== list.length) {
@@ -640,12 +629,10 @@ export const DataService = {
       }
 
       if (cloudList && cloudList.length > 0) {
-        // Exclude dummy test accounts and developer test accounts
+        // Exclude only placeholder @example.com test accounts
         cloudList = cloudList.filter((m) => {
           const emailLower = (m.email || '').toLowerCase().trim();
-          const idLower = (m.id || '').toLowerCase().trim();
           if (!emailLower || emailLower.endsWith('@example.com')) return false;
-          if (PERSONAL_EMAILS_TO_PURGE.has(emailLower) || PURGED_MEMBER_IDS.has(idLower)) return false;
           return true;
         });
 
@@ -724,12 +711,11 @@ export const DataService = {
     const deletedList = loadLocal<string[]>(KEYS.DELETED_MEMBERS, []);
     const deletedSet = new Set(deletedList.map((s) => s.toLowerCase().trim()));
 
-    // Exclude dummy test accounts ending with @example.com, personal developer accounts, AND any tombstoned IDs
+    // Exclude only placeholder @example.com test accounts and tombstoned IDs
     list = list.filter((m) => {
       const id = (m.id || '').toLowerCase().trim();
       const emailLower = (m.email || '').toLowerCase().trim();
       if (!m.email || emailLower.endsWith('@example.com')) return false;
-      if (PERSONAL_EMAILS_TO_PURGE.has(emailLower) || PURGED_MEMBER_IDS.has(id)) return false;
       return !deletedSet.has(id);
     });
 
@@ -821,25 +807,14 @@ export const DataService = {
     }
 
     if (list.length > 0) {
-      const cleanList = list.filter((m) => {
-        const id = (m.id || '').toLowerCase().trim();
-        return !PURGED_MEMBER_IDS.has(id);
-      });
-      saveLocal(KEYS.MEMBER_DIRECTORY, cleanList);
-      return cleanList;
+      saveLocal(KEYS.MEMBER_DIRECTORY, list);
+      return list;
     }
 
     // Fallback to local cache of directory or derive sanitized directory from local members
     const localDir = loadLocal<MemberDirectoryItem[]>(KEYS.MEMBER_DIRECTORY, []);
-    const cleanLocalDir = localDir.filter((m) => {
-      const id = (m.id || '').toLowerCase().trim();
-      return !PURGED_MEMBER_IDS.has(id);
-    });
-    if (cleanLocalDir.length > 0) {
-      if (cleanLocalDir.length !== localDir.length) {
-        saveLocal(KEYS.MEMBER_DIRECTORY, cleanLocalDir);
-      }
-      return cleanLocalDir;
+    if (localDir.length > 0) {
+      return localDir;
     }
 
     const localMembers = this.getLocalMembersSync();
@@ -980,29 +955,28 @@ export const DataService = {
       });
       saveLocal(KEYS.DELETED_MEMBERS, filteredDeleted);
 
-      // Persist to cloud asynchronously in background without blocking UI
-      this.pushMembersToCloud(updated).catch((err) => {
-        console.warn('Cloud sync background notice:', err);
-      });
-
+      // Persist to Firestore — AWAITED so cross-device sync is guaranteed
       if (this.isLiveFirebase() && db) {
-        setDoc(doc(db, 'member_profiles', newId), newMember, { merge: true }).catch((err) => {
-          console.warn('Firebase addMember sync error:', err);
-        });
-        const dirItem: MemberDirectoryItem = {
-          id: newId,
-          uid: newMember.uid,
-          fullName: newMember.fullName,
-          seatNumber: newMember.seatNumber,
-          batch: newMember.batch,
-          studyTarget: newMember.studyTarget,
-          membershipStatus: newMember.membershipStatus,
-          avatarUrl: newMember.avatarUrl || '',
-          updatedAt: new Date().toISOString(),
-        };
-        setDoc(doc(db, 'member_directory', newId), dirItem, { merge: true }).catch((err) => {
-          console.warn('Firebase addMember directory sync error:', err);
-        });
+        try {
+          await setDoc(doc(db, 'member_profiles', newId), newMember, { merge: true });
+          const dirItem: MemberDirectoryItem = {
+            id: newId,
+            uid: newMember.uid,
+            fullName: newMember.fullName,
+            seatNumber: newMember.seatNumber,
+            batch: newMember.batch,
+            studyTarget: newMember.studyTarget,
+            membershipStatus: newMember.membershipStatus,
+            avatarUrl: newMember.avatarUrl || '',
+            updatedAt: new Date().toISOString(),
+          };
+          await setDoc(doc(db, 'member_directory', newId), dirItem, { merge: true });
+        } catch (err: any) {
+          // Roll back local storage if Firestore write failed
+          const rolledBack = updated.filter((m) => m.id !== newId);
+          saveLocal(KEYS.MEMBERS, rolledBack);
+          throw new Error(`Failed to save member to database: ${err?.message || 'Network error'}. Please check your connection and try again.`);
+        }
       }
 
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -1917,19 +1891,18 @@ export const DataService = {
     let cloudMsgs: ChatMessage[] = [];
     if (this.isLiveFirebase() && db && sessionId) {
       try {
-        let q;
-        if (viewerUid) {
-          q = query(
-            collection(db, 'chat_messages'),
-            where('sessionId', '==', sessionId),
-            where('participantUids', 'array-contains', viewerUid)
-          );
-        } else {
-          q = query(collection(db, 'chat_messages'), where('sessionId', '==', sessionId));
-        }
+        // Use single-field query only (avoids composite index requirement)
+        const q = query(collection(db, 'chat_messages'), where('sessionId', '==', sessionId));
         const snap = await getDocs(q);
         if (snap && !snap.empty) {
           cloudMsgs = snap.docs.map((d) => d.data() as ChatMessage);
+          // Client-side participant filter if viewerUid provided
+          if (viewerUid) {
+            cloudMsgs = cloudMsgs.filter((m) =>
+              !m.participantUids || m.participantUids.length === 0 ||
+              m.participantUids.includes(viewerUid)
+            );
+          }
         }
       } catch (err) {
         console.warn('Firestore getChatMessages note:', err);
@@ -1978,18 +1951,11 @@ export const DataService = {
     let cloudMsgs: ChatMessage[] = [];
     if (this.isLiveFirebase() && db) {
       try {
-        let q;
-        if (viewerUid) {
-          q = query(
-            collection(db, 'chat_messages'),
-            where('participantUids', 'array-contains', viewerUid)
-          );
-        } else {
-          q = query(
-            collection(db, 'chat_messages'),
-            where('recipientId', '==', viewerId)
-          );
-        }
+        // Query by recipientId (single-field, no composite index required)
+        const q = query(
+          collection(db, 'chat_messages'),
+          where('recipientId', '==', viewerId)
+        );
         const snap = await getDocs(q);
         if (snap && !snap.empty) {
           cloudMsgs = snap.docs.map((d) => d.data() as ChatMessage);

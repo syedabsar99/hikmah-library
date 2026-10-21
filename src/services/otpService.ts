@@ -11,7 +11,7 @@ export const getActiveLibraryEmail = (): string => {
     const item = localStorage.getItem('hikmah_admin_creds_v2');
     if (item) {
       const parsed = JSON.parse(item);
-      if (parsed.email && parsed.email.toLowerCase() !== 'syedabsar99@gmail.com') return parsed.email;
+      if (parsed.email && parsed.email.toLowerCase().includes('@')) return parsed.email;
     }
   } catch {}
   return OFFICIAL_LIBRARY_EMAIL;
@@ -22,7 +22,7 @@ export const getActiveLibraryPhone = (): string => {
     const item = localStorage.getItem('hikmah_admin_creds_v2');
     if (item) {
       const parsed = JSON.parse(item);
-      if (parsed.phone && parsed.phone.replace(/[^0-9]/g, '') !== '9622497806') return parsed.phone;
+      if (parsed.phone) return parsed.phone;
     }
   } catch {}
   return OFFICIAL_LIBRARY_PHONE;
