@@ -9,13 +9,13 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
-  const { currentUser, isAdmin, isMember, logout, adminPhone, adminEmail } = useAuth();
+  const { currentUser, isAdmin, isMember, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showContactDropdown, setShowContactDropdown] = useState(false);
   const contactDropdownRef = useRef<HTMLDivElement>(null);
 
-  const cleanPhone = (adminPhone || '7006523332').replace(/[^0-9]/g, '');
-  const contactEmail = adminEmail || 'hikmahlibrary6@gmail.com';
+  const cleanPhone = '7006523332';
+  const contactEmail = 'hikmahlibrary6@gmail.com';
 
   const handleNav = (view: string) => {
     onNavigate(view);

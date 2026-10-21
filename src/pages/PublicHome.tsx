@@ -37,10 +37,10 @@ interface PublicHomeProps {
 }
 
 export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
-  const { isAdmin, adminPhone, adminEmail } = useAuth();
-  const cleanPhone = (adminPhone || '7006523332').replace(/[^0-9]/g, '');
-  const displayPhone = adminPhone.startsWith('+') ? adminPhone : `+91 ${adminPhone || '70065 23332'}`;
-  const contactEmail = adminEmail || 'hikmahlibrary6@gmail.com';
+  const { isAdmin } = useAuth();
+  const primaryPhone = '+91 70065 23332';
+  const primaryPhoneDigits = '7006523332';
+  const contactEmail = 'hikmahlibrary6@gmail.com';
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [facilities, setFacilities] = useState<LibraryFacility[]>([]);
   const [rules, setRules] = useState<LibraryRule[]>([]);
@@ -1273,14 +1273,14 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ onNavigate }) => {
                   Instant WhatsApp
                 </div>
                 <h3 style={{ fontSize: '1.15rem', color: '#FFFFFF', margin: '6px 0 10px 0', fontWeight: '800' }}>
-                  {displayPhone}
+                  {primaryPhone}
                 </h3>
                 <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: '1.55', margin: 0 }}>
                   Fastest response channel for seat reservation inquiries, fee slip verification, and student support.
                 </p>
               </div>
               <a
-                href={`https://wa.me/91${cleanPhone.slice(-10)}?text=Hello%20Hikmah%20Library%20Administration,%20I%20would%20like%20to%20inquire%20about%20admissions%20and%20seat%20availability.`}
+                href={`https://wa.me/91${primaryPhoneDigits}?text=Hello%20Hikmah%20Library%20Administration,%20I%20would%20like%20to%20inquire%20about%20admissions%20and%20seat%20availability.`}
                 target="_blank"
                 rel="noreferrer"
                 style={{

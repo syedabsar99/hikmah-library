@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { BookOpen, MapPin, Phone, Mail, Clock, ShieldCheck, MessageCircle } from 'lucide-react';
 import { InstagramIcon } from './InstagramIcon';
 import { FacebookIcon } from './FacebookIcon';
-import { useAuth } from '../context/AuthContext';
 import { getAssetUrl } from '../utils/assets';
 
 interface FooterProps {
@@ -11,8 +10,7 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const [imgError, setImgError] = useState(false);
-  const { adminEmail } = useAuth();
-  const contactEmail = adminEmail || 'hikmahlibrary6@gmail.com';
+  const contactEmail = 'hikmahlibrary6@gmail.com';
 
   return (
     <footer className="app-footer">
